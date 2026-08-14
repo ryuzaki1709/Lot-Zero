@@ -1,0 +1,15 @@
+node_modules/
+.env
+.env.*
+!.env.example
+dist/
+coverage/
+.turbo/
+.next/
+.vite/
+.firebase/
+.firestore/
+.pubsub/
+.superpowers/
+*.log
+
