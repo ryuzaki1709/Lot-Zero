@@ -6,11 +6,34 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    field_validator,
+)
 
 Identifier = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
-NonNegativeQuantity = Annotated[Decimal, Field(ge=Decimal("0"))]
 NonNegativeVersion = Annotated[int, Field(ge=0)]
+
+
+def _normalize_quantity(value: Decimal) -> Decimal:
+    """Store mathematically equal quantities with one Decimal exponent."""
+
+    if not value.is_finite():
+        raise ValueError("quantities must be finite")
+    if value == 0:
+        return Decimal("0")
+    return Decimal(format(value.normalize(), "f"))
+
+
+NonNegativeQuantity = Annotated[
+    Decimal,
+    Field(ge=Decimal("0")),
+    AfterValidator(_normalize_quantity),
+]
 
 
 class DomainRecord(BaseModel):

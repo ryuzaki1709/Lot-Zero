@@ -46,6 +46,24 @@ def test_records_are_frozen_and_reject_negative_quantities():
         )
 
 
+def test_equal_decimal_quantities_have_one_persisted_serialization():
+    shared_scope = {
+        "scope_id": "SCOPE-001",
+        "tenant_id": "EVAL-TENANT-01",
+        "case_id": "CASE-001",
+        "case_version": 1,
+        "scope_version": 1,
+        "status": "proposed",
+        "affected_record_ids": ("FP-100-L240814-A",),
+        "evidence_record_ids": ("LAB-SIGNAL-20260814-001",),
+        "created_at": datetime(2026, 8, 14, 12, tzinfo=UTC),
+    }
+    formatted_quantity = AffectedScope(**shared_scope, affected_quantity=Decimal("1.00"))
+    whole_quantity = AffectedScope(**shared_scope, affected_quantity=Decimal("1"))
+
+    assert formatted_quantity.model_dump_json() == whole_quantity.model_dump_json()
+
+
 def test_command_and_event_unions_are_closed_by_kind():
     command = Command.validate_python(
         {
