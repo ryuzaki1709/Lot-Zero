@@ -14,6 +14,7 @@ from .commands import (
     ApproveClosureCommand,
     ApproveContainmentCommand,
     ApproveNotificationCommand,
+    ApproveReleaseCommand,
     ApproveScopeCommand,
     CommandRecord,
     ProposeScopeCommand,
@@ -22,11 +23,13 @@ from .commands import (
     RequestContainmentCommand,
     SendNotificationCommand,
 )
+
 from .errors import InvariantViolation
 from .events import (
     AcknowledgementRecordedEvent,
     ClosureRequestedEvent,
     ContainmentAttemptedEvent,
+    ContainmentReleasedEvent,
     ContainmentRequestedEvent,
     NotificationRequestedEvent,
     ScopeProposedEvent,
@@ -72,6 +75,8 @@ def execute_command(
             case_version=command.case_version,
             scope_id=command.scope_id,
             scope_version=command.scope_version,
+            affected_record_ids=command.affected_record_ids,
+            affected_quantity=command.affected_quantity,
             evidence_record_ids=command.evidence_record_ids,
             kind="scope_proposed",
             occurred_at=now,
@@ -123,6 +128,12 @@ def execute_command(
             acknowledgement_id=command.acknowledgement_id,
             recipient_id=command.recipient_id,
             acknowledgement_status=command.acknowledgement_status,
+            caller_id=command.caller_id,
+            recipient_contact=command.recipient_contact,
+            recipient_phone=command.recipient_phone,
+            attestation_notes=command.attestation_notes,
+            attestation_hash=command.attestation_hash,
+            call_timestamp=command.call_timestamp,
             kind="acknowledgement_recorded",
             occurred_at=now,
         )
@@ -153,8 +164,10 @@ def execute_command(
             rationale=command.rationale,
             requester_id=command.actor_id,
             approver_id=principal.principal_id,
+            approver_role=principal.roles[0] if principal.roles else None,
             case_version=command.case_version,
             boundary_version="BOUND-01",
+            scope_id=command.scope_id,
             scope_version=command.scope_version,
             policy_version=command.policy_version,
             decided_at=now,
@@ -171,8 +184,10 @@ def execute_command(
             rationale=command.rationale,
             requester_id=command.actor_id,
             approver_id=principal.principal_id,
+            approver_role=principal.roles[0] if principal.roles else None,
             case_version=command.case_version,
             boundary_version="BOUND-01",
+            scope_id=command.scope_id,
             scope_version=command.scope_version,
             policy_version=command.policy_version,
             payload_version="PL-01",
@@ -190,8 +205,10 @@ def execute_command(
             rationale=command.rationale,
             requester_id=command.actor_id,
             approver_id=principal.principal_id,
+            approver_role=principal.roles[0] if principal.roles else None,
             case_version=command.case_version,
             boundary_version="BOUND-01",
+            scope_id=command.scope_id,
             scope_version=command.scope_version,
             payload_version=command.payload_version,
             policy_version=command.policy_version,
@@ -209,12 +226,56 @@ def execute_command(
             rationale=command.rationale,
             requester_id=command.actor_id,
             approver_id=principal.principal_id,
+            approver_role=principal.roles[0] if principal.roles else None,
             case_version=command.case_version,
             boundary_version="BOUND-01",
             policy_version=command.policy_version,
             decided_at=now,
         )
         events.append(approval)
+
+    elif isinstance(command, ApproveReleaseCommand):
+        approval = ApprovalDecision(
+            approval_id=command.approval_id,
+            tenant_id=command.tenant_id,
+            case_id=command.case_id,
+            approval_type="release",
+            decision="approved",
+            rationale=command.rationale,
+            requester_id=command.actor_id,
+            approver_id=principal.principal_id,
+            approver_role=principal.roles[0] if principal.roles else None,
+            case_version=command.case_version,
+            boundary_version="BOUND-RELEASE-01",
+            scope_id=command.scope_id,
+            scope_version=command.scope_version,
+            policy_version=command.policy_version,
+            retest_doc_id=command.retest_doc_id,
+            retest_doc_hash=command.retest_doc_hash,
+            decided_at=now,
+        )
+        events.append(approval)
+
+        # Emit release events ONLY when authority explicitly confirms Step 2 final clearance
+        if decision.code == "ALLOWED_RELEASE_FINAL_STEP":
+            for action in state.containment_actions:
+                if action.scope_id == command.scope_id and action.action_type == "provisional_hold":
+                    events.append(
+                        ContainmentReleasedEvent(
+                            event_id=f"EVT-REL-{action.action_id}",
+                            tenant_id=command.tenant_id,
+                            case_id=command.case_id,
+                            actor_id=command.actor_id,
+                            case_version=command.case_version,
+                            action_id=action.action_id,
+                            scope_id=command.scope_id,
+                            retest_doc_id=command.retest_doc_id,
+                            retest_doc_hash=command.retest_doc_hash,
+                            kind="containment_released",
+                            occurred_at=now,
+                        )
+                    )
+
 
     # Fold all new events over current state
     new_state = state

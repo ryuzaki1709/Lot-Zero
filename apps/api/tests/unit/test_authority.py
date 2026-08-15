@@ -8,9 +8,11 @@ from lot_zero.domain.authority import Principal, authorize
 from lot_zero.domain.commands import (
     ApproveClosureCommand,
     ApproveNotificationCommand,
+    ApproveReleaseCommand,
     ApproveScopeCommand,
     ExecuteStandingPolicyCommand,
     ProposeScopeCommand,
+    RecordAcknowledgementCommand,
     SendNotificationCommand,
 )
 from lot_zero.domain.identifiers import ActionIntent
@@ -18,6 +20,7 @@ from lot_zero.domain.models import (
     Acknowledgement,
     AffectedScope,
     ApprovalDecision,
+    ContainmentAction,
     IncidentState,
     NotificationPacket,
     RecallCase,
@@ -356,3 +359,183 @@ def test_agent_service_needs_a_matching_human_containment_approval() -> None:
     assert_inert_denial(missing, "MISSING_CONTAINMENT_APPROVAL")
     assert approved.allowed is True
     assert approved.requested_effects == (hold_intent(),)
+
+
+def test_dual_signature_release_authority_and_separation_of_duties() -> None:
+    valid_hash = "a" * 64
+    base_state = state().model_copy(
+        update={
+            "containment_actions": (
+                ContainmentAction(
+                    action_id="ACT-001",
+                    tenant_id=TENANT,
+                    case_id=CASE,
+                    scope_id="SCOPE-EVAL-01",
+                    scope_version=4,
+                    action_type="provisional_hold",
+                    status="succeeded",
+                    target_record_ids=("FP-100-L240814-A",),
+                    quantity=200,
+                    policy_version="HOLD-01",
+                    requested_at=NOW,
+                ),
+            )
+        }
+    )
+
+    release_cmd = ApproveReleaseCommand(
+        kind="approve_release",
+        command_id="CMD-REL-01",
+        approval_id="APP-REL-01",
+        tenant_id=TENANT,
+        case_id=CASE,
+        actor_id="REQUESTER-001",
+        case_version=7,
+        scope_id="SCOPE-EVAL-01",
+        scope_version=4,
+        retest_doc_id="LAB-RETEST-01",
+        retest_doc_hash=valid_hash,
+        policy_version="RELEASE-01",
+        rationale="Negative re-test verified under FDA BAM Ch. 5",
+    )
+
+    # 1. Dual role ambiguity rejection
+    dual_principal = Principal(tenant_id=TENANT, principal_id="DUAL-001", roles=("qa", "closure_authority"))
+    dual_decision = authorize(release_cmd, dual_principal, base_state)
+    assert_inert_denial(dual_decision, "DUAL_ROLE_AMBIGUITY")
+
+    # 2. Step 1: QA Lead approval succeeds
+    qa_principal = principal("qa", principal_id="QA-LEAD-01")
+    qa_decision = authorize(release_cmd, qa_principal, base_state)
+    assert qa_decision.allowed is True
+    assert qa_decision.code == "ALLOWED_RELEASE_QA_STEP"
+
+    # Create state with QA release approval
+    qa_approval_record = ApprovalDecision(
+        approval_id="APP-REL-QA-01",
+        tenant_id=TENANT,
+        case_id=CASE,
+        approval_type="release",
+        decision="approved",
+        rationale="Negative re-test verified",
+        requester_id="REQUESTER-001",
+        approver_id="QA-LEAD-01",
+        approver_role="qa",
+        case_version=7,
+        boundary_version="BOUND-RELEASE-01",
+        scope_id="SCOPE-EVAL-01",
+        scope_version=4,
+        policy_version="RELEASE-01",
+        retest_doc_id="LAB-RETEST-01",
+        retest_doc_hash=valid_hash,
+        decided_at=NOW,
+    )
+    state_with_qa = base_state.model_copy(update={"approvals": (qa_approval_record,)})
+
+    # 3. Step 2 Negative: Same principal attempting Closure Authority release
+    same_principal = principal("closure_authority", principal_id="QA-LEAD-01")
+    same_decision = authorize(release_cmd, same_principal, state_with_qa)
+    assert_inert_denial(same_decision, "DUAL_SIGNATURE_SAME_PRINCIPAL")
+
+    # 4. Step 2 Positive: Distinct Closure Authority principal succeeds
+    closure_principal = principal("closure_authority", principal_id="CLOSURE-AUTH-01")
+    closure_decision = authorize(release_cmd, closure_principal, state_with_qa)
+    assert closure_decision.allowed is True
+    assert closure_decision.code == "ALLOWED_RELEASE_FINAL_STEP"
+
+    # 5. Consumption check: Cannot consume the same QA clearance twice
+    final_approval_record = ApprovalDecision(
+        approval_id="APP-REL-FINAL-01",
+        tenant_id=TENANT,
+        case_id=CASE,
+        approval_type="release",
+        decision="approved",
+        rationale="Operational release final",
+        requester_id="REQUESTER-001",
+        approver_id="CLOSURE-AUTH-01",
+        approver_role="closure_authority",
+        case_version=7,
+        boundary_version="BOUND-RELEASE-01",
+        scope_id="SCOPE-EVAL-01",
+        scope_version=4,
+        policy_version="RELEASE-01",
+        retest_doc_id="LAB-RETEST-01",
+        retest_doc_hash=valid_hash,
+        decided_at=NOW,
+    )
+    state_already_consumed = state_with_qa.model_copy(update={"approvals": (qa_approval_record, final_approval_record)})
+    consumed_decision = authorize(release_cmd, closure_principal, state_already_consumed)
+    assert_inert_denial(consumed_decision, "QA_APPROVAL_ALREADY_CONSUMED")
+
+
+def test_consignee_rejection_blocks_closure_unconditionally() -> None:
+    rejected_state = state().model_copy(
+        update={
+            "acknowledgements": (
+                Acknowledgement(
+                    acknowledgement_id="ACK-REJECT-01",
+                    tenant_id=TENANT,
+                    case_id=CASE,
+                    packet_id="PACKET-001",
+                    recipient_id="RECIPIENT-001",
+                    status="rejected",
+                ),
+            )
+        }
+    )
+
+    close_cmd = ApproveClosureCommand(
+        kind="approve_closure",
+        command_id="CMD-CLOSE-001",
+        approval_id="APP-CLOSE-001",
+        tenant_id=TENANT,
+        case_id=CASE,
+        actor_id="REQUESTER-001",
+        case_version=7,
+        closure_id="EVAL-CLOSE-01",
+        policy_version="EVAL-CLOSE-01",
+        rationale="Closure attempt with rejected ack",
+        effectiveness_evidence_ids=("EVID-01",),
+        non_response_filing_id="REG-FILING-01",
+        attempt_count=5,  # Even with >=3 attempts, active refusal cannot be closed under non-response
+    )
+
+    decision = authorize(close_cmd, principal("closure_authority"), rejected_state)
+    assert_inert_denial(decision, "REJECTED_ACKNOWLEDGEMENT_REQUIRES_SEIZURE_REFERRAL")
+
+
+def test_cannot_downgrade_verified_acknowledgement() -> None:
+    verified_state = state().model_copy(
+        update={
+            "acknowledgements": (
+                Acknowledgement(
+                    acknowledgement_id="ACK-001",
+                    tenant_id=TENANT,
+                    case_id=CASE,
+                    packet_id="PACKET-001",
+                    recipient_id="RECIPIENT-001",
+                    status="verified",
+                    acknowledged_at=NOW,
+                ),
+            )
+        }
+    )
+
+    # Attempt to downgrade verified ack to outstanding
+    downgrade_cmd = RecordAcknowledgementCommand(
+        kind="record_acknowledgement",
+        command_id="CMD-ACK-DOWNGRADE-01",
+        tenant_id=TENANT,
+        case_id=CASE,
+        actor_id="OPS-001",
+        case_version=7,
+        packet_id="PACKET-001",
+        acknowledgement_id="ACK-001",
+        recipient_id="RECIPIENT-001",
+        acknowledgement_status="outstanding",
+    )
+
+    decision = authorize(downgrade_cmd, principal("customer_operations"), verified_state)
+    assert_inert_denial(decision, "CANNOT_DOWNGRADE_VERIFIED_ACKNOWLEDGEMENT")
+
+

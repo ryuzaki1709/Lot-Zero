@@ -3,11 +3,20 @@
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import Decimal
 from typing import Annotated, Literal
 
 from pydantic import Field, TypeAdapter
 
-from .models import ContainmentAction, DomainRecord, Identifier, NonNegativeVersion
+from .models import (
+    ApprovalDecision,
+    ContainmentAction,
+    DomainRecord,
+    Identifier,
+    NonNegativeQuantity,
+    NonNegativeVersion,
+)
+from .transitions import TransitionEvent
 
 
 class EventRecord(DomainRecord):
@@ -20,14 +29,16 @@ class EventRecord(DomainRecord):
 
 
 class ScopeProposedEvent(EventRecord):
-    kind: Literal["scope_proposed"]
+    kind: Literal["scope_proposed"] = "scope_proposed"
     scope_id: Identifier
     scope_version: NonNegativeVersion
+    affected_record_ids: tuple[Identifier, ...] = ()
+    affected_quantity: NonNegativeQuantity = Decimal("0")
     evidence_record_ids: Annotated[tuple[Identifier, ...], Field(min_length=1)]
 
 
 class ContainmentRequestedEvent(EventRecord):
-    kind: Literal["containment_requested"]
+    kind: Literal["containment_requested"] = "containment_requested"
     scope_id: Identifier
     scope_version: NonNegativeVersion
     action_id: Identifier
@@ -36,7 +47,7 @@ class ContainmentRequestedEvent(EventRecord):
 
 
 class NotificationRequestedEvent(EventRecord):
-    kind: Literal["notification_requested"]
+    kind: Literal["notification_requested"] = "notification_requested"
     scope_id: Identifier
     scope_version: NonNegativeVersion
     packet_id: Identifier
@@ -45,31 +56,41 @@ class NotificationRequestedEvent(EventRecord):
 
 
 class AcknowledgementRecordedEvent(EventRecord):
-    kind: Literal["acknowledgement_recorded"]
+    kind: Literal["acknowledgement_recorded"] = "acknowledgement_recorded"
     packet_id: Identifier
     acknowledgement_id: Identifier
     recipient_id: Identifier
     acknowledgement_status: Literal["verified", "outstanding", "rejected"]
+    caller_id: Identifier | None = None
+    recipient_contact: Identifier | None = None
+    recipient_phone: Identifier | None = None
+    attestation_notes: Identifier | None = None
+    attestation_hash: Identifier | None = None
+    call_timestamp: datetime | None = None
 
 
 class ClosureRequestedEvent(EventRecord):
-    kind: Literal["closure_requested"]
+    kind: Literal["closure_requested"] = "closure_requested"
     closure_id: Identifier
     policy_version: Identifier
     outstanding_acknowledgement_ids: tuple[Identifier, ...] = ()
 
 
 class ContainmentAttemptedEvent(EventRecord):
-    """One persisted attempt at a reserved containment action.
+    """One persisted attempt at a reserved containment action."""
 
-    The event carries the full, authentic ``ContainmentAction`` snapshot the kernel
-    computed for this attempt (quantity, targets, payload hash, and idempotency token
-    all derive from the approved ``ActionIntent`` — never a fabricated value). The
-    reducer upserts the action by ``action_id`` so replays are deterministic.
-    """
-
-    kind: Literal["containment_attempted"]
+    kind: Literal["containment_attempted"] = "containment_attempted"
     action: ContainmentAction
+
+
+class ContainmentReleasedEvent(EventRecord):
+    """One persisted inventory release on verified negative re-test."""
+
+    kind: Literal["containment_released"] = "containment_released"
+    action_id: Identifier
+    scope_id: Identifier
+    retest_doc_id: Identifier
+    retest_doc_hash: Identifier
 
 
 type EventValue = Annotated[
@@ -78,7 +99,10 @@ type EventValue = Annotated[
     | NotificationRequestedEvent
     | AcknowledgementRecordedEvent
     | ClosureRequestedEvent
-    | ContainmentAttemptedEvent,
+    | ContainmentAttemptedEvent
+    | ContainmentReleasedEvent
+    | TransitionEvent
+    | ApprovalDecision,
     Field(discriminator="kind"),
 ]
 Event = TypeAdapter(EventValue)

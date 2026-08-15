@@ -152,3 +152,101 @@ def test_command_and_event_unions_are_closed_by_kind():
         Command.validate_python({"kind": "invented"})
     with pytest.raises(ValidationError):
         Event.validate_python({"kind": "invented"})
+
+
+def test_evidence_span_document_binding_and_offset_invariants():
+    from lot_zero.domain.models import EvidenceSpan
+
+    now = datetime(2026, 8, 14, 12, tzinfo=UTC)
+    valid_hash = "a" * 64
+
+    # Valid span
+    span = EvidenceSpan(
+        evidence_id="EVID-01",
+        tenant_id="EVAL-TENANT-01",
+        case_id="CASE-001",
+        source_record_id="LAB-SIGNAL-01",
+        source_doc_hash=valid_hash,
+        doc_version="v1.0",
+        claim_type="contaminated_lot",
+        start_offset=10,
+        end_offset=50,
+        captured_at=now,
+    )
+    assert span.end_offset > span.start_offset
+
+    # Inverted offsets rejected
+    with pytest.raises(ValidationError):
+        EvidenceSpan(
+            evidence_id="EVID-01",
+            tenant_id="EVAL-TENANT-01",
+            case_id="CASE-001",
+            source_record_id="LAB-SIGNAL-01",
+            source_doc_hash=valid_hash,
+            doc_version="v1.0",
+            claim_type="contaminated_lot",
+            start_offset=50,
+            end_offset=10,
+            captured_at=now,
+        )
+
+    # Invalid SHA-256 hash rejected
+    with pytest.raises(ValidationError):
+        EvidenceSpan(
+            evidence_id="EVID-01",
+            tenant_id="EVAL-TENANT-01",
+            case_id="CASE-001",
+            source_record_id="LAB-SIGNAL-01",
+            source_doc_hash="not-a-sha256",
+            doc_version="v1.0",
+            claim_type="contaminated_lot",
+            start_offset=10,
+            end_offset=50,
+            captured_at=now,
+        )
+
+
+def test_ledger_cryptographic_chain_and_tamper_detection():
+    from lot_zero.domain.errors import InvariantViolation
+    from lot_zero.domain.ledger import append_ledger_entry, verify_ledger
+
+    now = datetime(2026, 8, 14, 12, tzinfo=UTC)
+    ledger = ()
+
+    ledger = append_ledger_entry(
+        ledger,
+        ledger_id="LEDGER-001",
+        tenant_id="EVAL-TENANT-01",
+        case_id="CASE-001",
+        entry_type="SCOPE_PROPOSED",
+        record_ids=("SCOPE-001",),
+        payload_hash="hash-1",
+        created_at=now,
+    )
+    ledger = append_ledger_entry(
+        ledger,
+        ledger_id="LEDGER-002",
+        tenant_id="EVAL-TENANT-01",
+        case_id="CASE-001",
+        entry_type="CONTAINMENT_REQUESTED",
+        record_ids=("ACT-001",),
+        payload_hash="hash-2",
+        created_at=now,
+    )
+
+    # 1. Clean ledger verification passes
+    assert verify_ledger(ledger) is True
+    assert len(ledger) == 2
+    assert ledger[1].prior_entry_hash == ledger[0].entry_hash
+
+    # 2. Tampered entry_type detected
+    tampered_entry = ledger[0].model_copy(update={"entry_type": "TAMPERED_ENTRY_TYPE"})
+    tampered_ledger = (tampered_entry, ledger[1])
+    with pytest.raises(InvariantViolation, match="Ledger entry hash tampering detected"):
+        verify_ledger(tampered_ledger)
+
+    # 3. Broken hash chain detected
+    tampered_chain = (ledger[0], ledger[1].model_copy(update={"prior_entry_hash": "broken_hash"}))
+    with pytest.raises(InvariantViolation, match="Ledger hash-chain break"):
+        verify_ledger(tampered_chain)
+

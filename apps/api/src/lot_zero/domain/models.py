@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Self
 
 from pydantic import (
     AfterValidator,
@@ -13,15 +13,27 @@ from pydantic import (
     Field,
     StringConstraints,
     field_validator,
+    model_validator,
 )
 
 Identifier = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+RationaleText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=5)]
+Sha256Hash = Annotated[str, StringConstraints(strip_whitespace=True, pattern=r"^[a-fA-F0-9]{64}$")]
 NonNegativeVersion = Annotated[int, Field(ge=0)]
+
+Phase = Literal[
+    "signal_received",
+    "scope_review",
+    "provisional_containment",
+    "action_review",
+    "ack_monitoring",
+    "effectiveness_check",
+    "closed",
+]
 
 
 def _normalize_quantity(value: Decimal) -> Decimal:
     """Trim insignificant zeroes in time proportional to input digits, not exponent."""
-
     if not value.is_finite():
         raise ValueError("quantities must be finite")
     if value == 0:
@@ -66,15 +78,7 @@ class DomainRecord(BaseModel):
 class RecallCase(DomainRecord):
     case_id: Identifier
     tenant_id: Identifier
-    phase: Literal[
-        "signal_received",
-        "scope_review",
-        "provisional_containment",
-        "action_review",
-        "ack_monitoring",
-        "effectiveness_check",
-        "closed",
-    ]
+    phase: Phase
     case_version: NonNegativeVersion
     source_record_ids: Annotated[tuple[Identifier, ...], Field(min_length=1)]
     created_at: datetime
@@ -86,10 +90,18 @@ class EvidenceSpan(DomainRecord):
     tenant_id: Identifier
     case_id: Identifier
     source_record_id: Identifier
+    source_doc_hash: Sha256Hash
+    doc_version: Identifier
     claim_type: Identifier
     start_offset: NonNegativeVersion
     end_offset: NonNegativeVersion
     captured_at: datetime
+
+    @model_validator(mode="after")
+    def validate_offset_range(self) -> Self:
+        if self.end_offset <= self.start_offset:
+            raise ValueError(f"end_offset ({self.end_offset}) must be strictly greater than start_offset ({self.start_offset})")
+        return self
 
 
 class AffectedScope(DomainRecord):
@@ -130,29 +142,42 @@ class ContainmentAction(DomainRecord):
     quantity: NonNegativeQuantity
     policy_version: Identifier
     requested_at: datetime
-    # Retry identity and reconciliation state. Optional so pre-existing constructions
-    # remain valid; the kernel populates them when it reserves and drives an action.
+    hold_expires_at: datetime | None = None
     idempotency_token: Identifier | None = None
     payload_hash: Identifier | None = None
     provider_reference: Identifier | None = None
     attempt: NonNegativeVersion = 0
 
 
+Role = Literal["recall_coordinator", "qa", "customer_operations", "agent_service", "closure_authority"]
+
+
 class ApprovalDecision(DomainRecord):
+    kind: Literal["approval_decision"] = "approval_decision"
     approval_id: Identifier
     tenant_id: Identifier
     case_id: Identifier
-    approval_type: Literal["scope", "containment", "notification", "closure"]
+    approval_type: Literal["scope", "containment", "notification", "closure", "release"]
     decision: Literal["approved", "rejected"]
-    rationale: Identifier
+    rationale: RationaleText
     requester_id: Identifier
     approver_id: Identifier
+    approver_role: Role | None = None
     case_version: NonNegativeVersion
     boundary_version: Identifier
+    scope_id: Identifier | None = None
     scope_version: NonNegativeVersion | None = None
     payload_version: Identifier | None = None
     policy_version: Identifier | None = None
+    retest_doc_id: Identifier | None = None
+    retest_doc_hash: Sha256Hash | None = None
     decided_at: datetime
+
+    @model_validator(mode="after")
+    def validate_release_evidence(self) -> Self:
+        if self.approval_type == "release" and not (self.retest_doc_id and self.retest_doc_hash):
+            raise ValueError("Release approval decision requires both retest_doc_id and verified 64-char hex retest_doc_hash")
+        return self
 
 
 class NotificationPacket(DomainRecord):
@@ -175,7 +200,18 @@ class Acknowledgement(DomainRecord):
     packet_id: Identifier
     recipient_id: Identifier
     status: Literal["verified", "outstanding", "rejected"]
+    caller_id: Identifier | None = None
+    recipient_contact: Identifier | None = None
+    recipient_phone: Identifier | None = None
+    attestation_notes: Identifier | None = None
+    attestation_hash: Identifier | None = None
     acknowledged_at: datetime | None = None
+
+    @model_validator(mode="after")
+    def validate_verified_evidence(self) -> Self:
+        if self.status == "verified" and not self.acknowledged_at:
+            raise ValueError("Verified acknowledgement requires acknowledged_at timestamp")
+        return self
 
 
 class LedgerEntry(DomainRecord):
@@ -187,6 +223,7 @@ class LedgerEntry(DomainRecord):
     record_ids: Annotated[tuple[Identifier, ...], Field(min_length=1)]
     payload_hash: Identifier
     prior_entry_hash: Identifier | None = None
+    entry_hash: Identifier
     created_at: datetime
 
 
@@ -194,27 +231,19 @@ class RecoveryState(DomainRecord):
     """An orthogonal pause which can only return to its originating phase."""
 
     status: Literal["needs_information", "failed_retryable", "blocked"]
-    parent_phase: Literal[
-        "signal_received",
-        "scope_review",
-        "provisional_containment",
-        "action_review",
-        "ack_monitoring",
-        "effectiveness_check",
-        "closed",
-    ]
-    return_phase: Literal[
-        "signal_received",
-        "scope_review",
-        "provisional_containment",
-        "action_review",
-        "ack_monitoring",
-        "effectiveness_check",
-        "closed",
-    ]
+    parent_phase: Phase
+    return_phase: Phase
     reason_record_ids: Annotated[tuple[Identifier, ...], Field(min_length=1)]
     retry_attempt: NonNegativeVersion | None = None
     retry_limit: NonNegativeVersion | None = None
+
+    @model_validator(mode="after")
+    def validate_phase_consistency(self) -> Self:
+        if self.parent_phase != self.return_phase:
+            raise ValueError(f"parent_phase ({self.parent_phase}) must match return_phase ({self.return_phase})")
+        if self.parent_phase == "closed":
+            raise ValueError("Recovery state cannot pause in or return to terminal 'closed' phase")
+        return self
 
 
 class IncidentState(DomainRecord):
@@ -228,3 +257,24 @@ class IncidentState(DomainRecord):
     ledger: tuple[LedgerEntry, ...] = ()
     recovery: RecoveryState | None = None
     updated_at: datetime
+
+    @model_validator(mode="after")
+    def enforce_tenant_case_coherence(self) -> Self:
+        tenant_id = self.case.tenant_id
+        case_id = self.case.case_id
+        for s in self.scopes:
+            if s.tenant_id != tenant_id or s.case_id != case_id:
+                raise ValueError(f"Scope {s.scope_id} tenant/case mismatch with parent case ({tenant_id}/{case_id})")
+        for a in self.containment_actions:
+            if a.tenant_id != tenant_id or a.case_id != case_id:
+                raise ValueError(f"Containment action {a.action_id} tenant/case mismatch with parent case ({tenant_id}/{case_id})")
+        for app in self.approvals:
+            if app.tenant_id != tenant_id or app.case_id != case_id:
+                raise ValueError(f"Approval {app.approval_id} tenant/case mismatch with parent case ({tenant_id}/{case_id})")
+        for ack in self.acknowledgements:
+            if ack.tenant_id != tenant_id or ack.case_id != case_id:
+                raise ValueError(f"Acknowledgement {ack.acknowledgement_id} tenant/case mismatch with parent case ({tenant_id}/{case_id})")
+        for l in self.ledger:
+            if l.tenant_id != tenant_id or l.case_id != case_id:
+                raise ValueError(f"Ledger entry {l.ledger_id} tenant/case mismatch with parent case ({tenant_id}/{case_id})")
+        return self

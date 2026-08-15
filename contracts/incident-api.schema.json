@@ -107,6 +107,30 @@
         },
         "runtime": {
           "$ref": "#/$defs/RuntimeMetadata"
+        },
+        "metrics": {
+          "type": "object"
+        },
+        "packets": {
+          "type": "array"
+        },
+        "closure_gate": {
+          "type": "object"
+        },
+        "ledger_count": {
+          "type": "integer"
+        },
+        "approvals": {
+          "type": "array"
+        },
+        "containment_actions": {
+          "type": "array"
+        },
+        "acknowledgements": {
+          "type": "array"
+        },
+        "scopes": {
+          "type": "array"
         }
       },
       "required": ["header"],

@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+from decimal import Decimal
 from typing import Annotated, Literal
 
 from pydantic import Field, TypeAdapter
 
 from .identifiers import ActionIntent
-from .models import DomainRecord, Identifier, NonNegativeVersion
+from .models import DomainRecord, Identifier, NonNegativeQuantity, NonNegativeVersion
 
 
 class CommandRecord(DomainRecord):
@@ -22,6 +24,8 @@ class ProposeScopeCommand(CommandRecord):
     kind: Literal["propose_scope"]
     scope_id: Identifier
     scope_version: NonNegativeVersion
+    affected_record_ids: tuple[Identifier, ...] = ()
+    affected_quantity: NonNegativeQuantity = Decimal("0")
     evidence_record_ids: Annotated[tuple[Identifier, ...], Field(min_length=1)]
     policy_version: Identifier
 
@@ -51,6 +55,12 @@ class RecordAcknowledgementCommand(CommandRecord):
     acknowledgement_id: Identifier
     recipient_id: Identifier
     acknowledgement_status: Literal["verified", "outstanding", "rejected"]
+    caller_id: Identifier | None = None
+    recipient_contact: Identifier | None = None
+    recipient_phone: Identifier | None = None
+    attestation_notes: Identifier | None = None
+    attestation_hash: Identifier | None = None
+    call_timestamp: datetime | None = None
 
 
 class RequestClosureCommand(CommandRecord):
@@ -95,6 +105,17 @@ class ApproveClosureCommand(ApprovalCommand):
     closure_id: Identifier
     policy_version: Identifier
     effectiveness_evidence_ids: Annotated[tuple[Identifier, ...], Field(min_length=1)]
+    non_response_filing_id: Identifier | None = None
+    attempt_count: int | None = None
+
+
+class ApproveReleaseCommand(ApprovalCommand):
+    kind: Literal["approve_release"]
+    scope_id: Identifier
+    scope_version: NonNegativeVersion
+    retest_doc_id: Identifier
+    retest_doc_hash: Identifier
+    policy_version: Identifier
 
 
 class ExecuteStandingPolicyCommand(CommandRecord):
@@ -112,7 +133,9 @@ type CommandValue = Annotated[
     | ApproveContainmentCommand
     | ApproveNotificationCommand
     | ApproveClosureCommand
+    | ApproveReleaseCommand
     | ExecuteStandingPolicyCommand,
     Field(discriminator="kind"),
 ]
 Command = TypeAdapter(CommandValue)
+

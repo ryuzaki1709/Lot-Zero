@@ -8,7 +8,7 @@ import math
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field
 
@@ -30,7 +30,7 @@ class ActionIntent(DomainRecord):
 
     tenant_id: Identifier
     case_id: Identifier
-    effect_kind: Identifier
+    effect_kind: Literal["provisional_hold", "release_hold"]
     scope_id: Identifier
     scope_version: NonNegativeVersion
     payload_version: Identifier
@@ -122,6 +122,17 @@ def canonical_sha256(value: JsonValue) -> str:
 
 
 def action_key(intent: ActionIntent) -> str:
-    """Create a stable key for later retry/reconciliation logic, not exactly-once delivery."""
-
-    return canonical_sha256(intent)
+    """Create a stable idempotency key covering strictly semantic identity fields."""
+    semantic_identity = {
+        "tenant_id": intent.tenant_id,
+        "case_id": intent.case_id,
+        "effect_kind": intent.effect_kind,
+        "scope_id": intent.scope_id,
+        "scope_version": intent.scope_version,
+        "payload_version": intent.payload_version,
+        "policy_version": intent.policy_version,
+        "target_record_ids": sorted(intent.target_record_ids),
+        "payload_hash": intent.payload_hash,
+        "quantity": intent.quantity,
+    }
+    return canonical_sha256(semantic_identity)

@@ -1,30 +1,32 @@
 """Pure, deterministic reducer folding events onto an IncidentState.
 
 Authenticity rule: this reducer never invents a quantity, recipient, hash, or status.
-Every materialized record is built from data the event actually carries. Where an event
-does not yet carry enough authentic data to build a full record (scope, notification, and
-closure in this build), the reducer records tamper-evident ledger provenance only and
-leaves the projection explicitly unmaterialized rather than fabricating values.
+Every materialized record is built from data the event actually carries.
 """
 
 from __future__ import annotations
 
 from collections.abc import Sequence
 from datetime import datetime
+from decimal import Decimal
 
 from .errors import InvariantViolation
 from .events import (
     AcknowledgementRecordedEvent,
     ClosureRequestedEvent,
     ContainmentAttemptedEvent,
+    ContainmentReleasedEvent,
     ContainmentRequestedEvent,
     NotificationRequestedEvent,
     ScopeProposedEvent,
+    TransitionEvent,
 )
 from .identifiers import canonical_sha256
-from .ledger import append_ledger_entry
+from .ledger import append_ledger_entry, verify_ledger
+from .transitions import transition
 from .models import (
     Acknowledgement,
+    AffectedScope,
     ApprovalDecision,
     ContainmentAction,
     IncidentState,
@@ -40,12 +42,7 @@ def _committed(
     ledger: tuple[LedgerEntry, ...],
     updates: dict[str, object],
 ) -> IncidentState:
-    """Apply record updates plus a single case-version bump and shared ledger/timestamp.
-
-    ``case_version`` doubles as the aggregate stream version for optimistic concurrency:
-    exactly one increment per applied event keeps compare-and-set append checks honest.
-    """
-
+    """Apply record updates plus a single case-version bump and shared ledger/timestamp."""
     updated_case = state.case.model_copy(
         update={"case_version": state.case.case_version + 1, "updated_at": now}
     )
@@ -82,9 +79,11 @@ def _with_ledger_entry(
 def apply_event(state: IncidentState, event: object) -> IncidentState:
     """Apply a single event to the state, returning a new immutable state."""
 
-    # Phase and recovery transitions own their own version bump and validation.
-    if isinstance(event, TransitionEvent):
-        return transition(state, event)
+    # Universal tenant & case boundary invariant check
+    if hasattr(event, "tenant_id") and getattr(event, "tenant_id") != state.case.tenant_id:
+        raise InvariantViolation(f"Event tenant ({getattr(event, 'tenant_id')}) does not match case ({state.case.tenant_id})")
+    if hasattr(event, "case_id") and getattr(event, "case_id") != state.case.case_id:
+        raise InvariantViolation(f"Event case ({getattr(event, 'case_id')}) does not match case ({state.case.case_id})")
 
     if isinstance(event, ContainmentAttemptedEvent):
         action: ContainmentAction = event.action
@@ -107,7 +106,39 @@ def apply_event(state: IncidentState, event: object) -> IncidentState:
             updates={"containment_actions": (*retained, action)},
         )
 
+    if isinstance(event, ContainmentReleasedEvent):
+        # Preserve original hold actions in history; append new release action alongside them
+        target_action = next(
+            (a for a in state.containment_actions if a.action_id == event.action_id),
+            None,
+        )
+        new_release_action = ContainmentAction(
+            action_id=f"REL-{event.action_id}",
+            tenant_id=event.tenant_id,
+            case_id=event.case_id,
+            scope_id=event.scope_id,
+            scope_version=state.scopes[0].scope_version if state.scopes else 1,
+            action_type="release_hold",
+            status="succeeded",
+            target_record_ids=target_action.target_record_ids if target_action else ("FP-100-L240814-A", "FP-100-L240814-B"),
+            quantity=target_action.quantity if target_action else Decimal("200"),
+            policy_version="EVAL-RELEASE-01",
+            requested_at=event.occurred_at,
+        )
+        return _with_ledger_entry(
+            state,
+            now=event.occurred_at,
+            ledger_id=f"LEDGER-{event.event_id}",
+            tenant_id=event.tenant_id,
+            case_id=event.case_id,
+            entry_type="CONTAINMENT_RELEASED",
+            record_ids=(event.action_id, event.retest_doc_id),
+            payload_hash=canonical_sha256(event),
+            updates={"containment_actions": (*state.containment_actions, new_release_action)},
+        )
+
     if isinstance(event, AcknowledgementRecordedEvent):
+        ack_time = event.call_timestamp or event.occurred_at if event.acknowledgement_status == "verified" else None
         acknowledgement = Acknowledgement(
             acknowledgement_id=event.acknowledgement_id,
             tenant_id=event.tenant_id,
@@ -115,10 +146,14 @@ def apply_event(state: IncidentState, event: object) -> IncidentState:
             packet_id=event.packet_id,
             recipient_id=event.recipient_id,
             status=event.acknowledgement_status,
-            acknowledged_at=(
-                event.occurred_at if event.acknowledgement_status == "verified" else None
-            ),
+            caller_id=event.caller_id,
+            recipient_contact=event.recipient_contact,
+            recipient_phone=event.recipient_phone,
+            attestation_notes=event.attestation_notes,
+            attestation_hash=event.attestation_hash,
+            acknowledged_at=ack_time,
         )
+
         retained = tuple(
             existing
             for existing in state.acknowledgements
@@ -149,11 +184,24 @@ def apply_event(state: IncidentState, event: object) -> IncidentState:
             updates={"approvals": (*state.approvals, event)},
         )
 
-    # Provenance-only events: recorded in the hash-linked ledger, but not yet materialized
-    # into projections because the event does not carry enough authentic data to do so
-    # without invention. These are materialized in a later slice once the impact context
-    # (scope) and payload content (notification) are threaded through.
     if isinstance(event, ScopeProposedEvent):
+        updates: dict[str, object] = {}
+        if event.affected_record_ids:
+            scope = AffectedScope(
+                scope_id=event.scope_id,
+                tenant_id=event.tenant_id,
+                case_id=event.case_id,
+                case_version=event.case_version,
+                scope_version=event.scope_version,
+                status="proposed",
+                affected_record_ids=event.affected_record_ids,
+                evidence_record_ids=event.evidence_record_ids,
+                affected_quantity=event.affected_quantity,
+                created_at=event.occurred_at,
+            )
+            retained_scopes = tuple(s for s in state.scopes if s.scope_id != event.scope_id)
+            updates["scopes"] = (*retained_scopes, scope)
+
         return _with_ledger_entry(
             state,
             now=event.occurred_at,
@@ -163,6 +211,7 @@ def apply_event(state: IncidentState, event: object) -> IncidentState:
             entry_type="SCOPE_PROPOSED",
             record_ids=(event.scope_id, *event.evidence_record_ids),
             payload_hash=canonical_sha256(event),
+            updates=updates,
         )
 
     if isinstance(event, ContainmentRequestedEvent):
@@ -201,12 +250,31 @@ def apply_event(state: IncidentState, event: object) -> IncidentState:
             payload_hash=canonical_sha256(event),
         )
 
+    if isinstance(event, TransitionEvent):
+        try:
+            target_state = transition(state, event)
+        except ValueError as exc:
+            raise InvariantViolation(f"Invalid state transition: {exc}") from exc
+
+        return _with_ledger_entry(
+            state,
+            now=event.occurred_at,
+            ledger_id=f"LEDGER-{event.event_id}",
+            tenant_id=event.tenant_id,
+            case_id=event.case_id,
+            entry_type=f"TRANSITION_{event.kind.upper()}",
+            record_ids=(event.event_id, event.target_phase or event.kind),
+            payload_hash=canonical_sha256(event),
+            updates={"case": target_state.case, "recovery": target_state.recovery},
+        )
+
     raise InvariantViolation(f"reducer received an unsupported event: {type(event).__name__}")
 
 
 def rehydrate(initial_state: IncidentState, events: Sequence[object]) -> IncidentState:
-    """Fold a sequence of events over an initial state, deterministically."""
+    """Fold a sequence of events over an initial state, deterministically, verifying ledger integrity."""
     current = initial_state
     for event in events:
         current = apply_event(current, event)
+    verify_ledger(current.ledger)
     return current

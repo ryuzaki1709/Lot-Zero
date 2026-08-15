@@ -1,17 +1,46 @@
+# Dependencies
 node_modules/
-.env
-.env.*
-!.env.example
+.venv/
+venv/
+ENV/
+env/
+
+# Build artifacts
 dist/
-coverage/
+dist-ssr/
+build/
+*.egg-info/
 .turbo/
 .next/
 .vite/
-.firebase/
-.firestore/
-.pubsub/
-.superpowers/
-.pytest-tmp/
+
+# Python cache & testing
 __pycache__/
 *.py[cod]
+*$py.class
+.pytest_cache/
+.pytest-tmp/
+.pytest-tmp-review/
+.hypothesis/
+.ruff_cache/
+coverage/
+.coverage
+htmlcov/
+
+# Local databases & logs
+*.db
+*.sqlite
+*.sqlite3
 *.log
+
+# Environment configs
+.env
+.env.*
+!.env.example
+
+# OS and IDE files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+.superpowers/
