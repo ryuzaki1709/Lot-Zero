@@ -10,7 +10,7 @@ import { EvidenceLedger } from './components/EvidenceLedger';
 import { HowItWorksModal } from './components/HowItWorksModal';
 import './styles/antigravity.css';
 
-const API_BASE = 'http://127.0.0.1:8000';
+const API_BASE = '';
 
 // SECURITY NOTE: These evaluation keys match the server's default demo environment in auth.py.
 // For production deployments, keys must NOT be present in client-side code; use server-issued sessions / OAuth.

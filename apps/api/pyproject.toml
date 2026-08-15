@@ -12,6 +12,9 @@ dependencies = [
   "pydantic>=2.9,<3",
 ]
 
+[tool.hatch.build.targets.wheel]
+packages = ["src/lot_zero"]
+
 [project.optional-dependencies]
 dev = [
   "jsonschema>=4.23,<5",

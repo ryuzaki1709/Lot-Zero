@@ -45,6 +45,13 @@ async def seed():
     print(f"Seeding demo cases into: {DB_PATH}")
     repo = SqliteIncidentRepository(db_path=DB_PATH, initial_state_factory=initial_state)
 
+    # Clean existing demo cases
+    with repo._conn:
+        repo._conn.execute(
+            "DELETE FROM incident_events WHERE tenant_id = ? AND case_id LIKE 'CASE-%'",
+            (TENANT_ID,),
+        )
+
     # 1. CASE-SALMONELLA-4417 (Active Hold)
     ev_c1_1 = ScopeProposedEvent(
         event_id="EVT-SEED-C1-01",
@@ -141,28 +148,78 @@ async def seed():
         evidence_record_ids=("LAB-BNZ-01",),
         occurred_at=NOW - timedelta(days=3),
     )
-    ev_c4_2 = ContainmentReleasedEvent(
+    ev_c4_t1 = TransitionEvent(
         event_id="EVT-SEED-C4-02",
         tenant_id=TENANT_ID,
         case_id="CASE-BENZENE-CLOSED",
-        actor_id="QA-LEAD-01",
         case_version=1,
-        action_id="ACT-BNZ-01",
-        scope_id="SCOPE-BNZ-01",
-        retest_doc_id="LAB-RETEST-CLEAN-01",
-        retest_doc_hash="a" * 64,
-        occurred_at=NOW - timedelta(days=2),
+        kind="advance",
+        target_phase="scope_review",
+        occurred_at=NOW - timedelta(days=3),
     )
-    ev_c4_3 = TransitionEvent(
+    ev_c4_t2 = TransitionEvent(
         event_id="EVT-SEED-C4-03",
         tenant_id=TENANT_ID,
         case_id="CASE-BENZENE-CLOSED",
         case_version=2,
         kind="advance",
+        target_phase="provisional_containment",
+        occurred_at=NOW - timedelta(days=2),
+    )
+    ev_c4_t3 = TransitionEvent(
+        event_id="EVT-SEED-C4-04",
+        tenant_id=TENANT_ID,
+        case_id="CASE-BENZENE-CLOSED",
+        case_version=3,
+        kind="advance",
+        target_phase="action_review",
+        occurred_at=NOW - timedelta(days=2),
+    )
+    ev_c4_t4 = TransitionEvent(
+        event_id="EVT-SEED-C4-05",
+        tenant_id=TENANT_ID,
+        case_id="CASE-BENZENE-CLOSED",
+        case_version=4,
+        kind="advance",
+        target_phase="ack_monitoring",
+        occurred_at=NOW - timedelta(days=2),
+    )
+    ev_c4_t5 = TransitionEvent(
+        event_id="EVT-SEED-C4-06",
+        tenant_id=TENANT_ID,
+        case_id="CASE-BENZENE-CLOSED",
+        case_version=5,
+        kind="advance",
+        target_phase="effectiveness_check",
+        occurred_at=NOW - timedelta(days=1),
+    )
+    ev_c4_rel = ContainmentReleasedEvent(
+        event_id="EVT-SEED-C4-07",
+        tenant_id=TENANT_ID,
+        case_id="CASE-BENZENE-CLOSED",
+        actor_id="QA-LEAD-01",
+        case_version=6,
+        action_id="ACT-BNZ-01",
+        scope_id="SCOPE-BNZ-01",
+        retest_doc_id="LAB-RETEST-CLEAN-01",
+        retest_doc_hash="a" * 64,
+        occurred_at=NOW - timedelta(days=1),
+    )
+    ev_c4_close = TransitionEvent(
+        event_id="EVT-SEED-C4-08",
+        tenant_id=TENANT_ID,
+        case_id="CASE-BENZENE-CLOSED",
+        case_version=7,
+        kind="advance",
         target_phase="closed",
         occurred_at=NOW - timedelta(days=1),
     )
-    await repo.append("CASE-BENZENE-CLOSED", expected_version=0, events=[ev_c4_1, ev_c4_2, ev_c4_3], tenant_id=TENANT_ID)
+    await repo.append(
+        "CASE-BENZENE-CLOSED",
+        expected_version=0,
+        events=[ev_c4_1, ev_c4_t1, ev_c4_t2, ev_c4_t3, ev_c4_t4, ev_c4_t5, ev_c4_rel, ev_c4_close],
+        tenant_id=TENANT_ID,
+    )
 
     repo.close()
     print("Demo seed complete! 4 cases populated in SQLite.")
