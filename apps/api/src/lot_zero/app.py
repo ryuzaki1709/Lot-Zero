@@ -9,6 +9,7 @@ import os
 import re
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from pathlib import Path
 from typing import Annotated, Any, Literal
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
@@ -106,7 +107,7 @@ def create_initial_state(tenant_id: str = TENANT_ID, case_id: str = DEFAULT_CASE
 current_state: IncidentState = create_initial_state()
 subscribers: list[asyncio.Queue[str]] = []
 notification_sink = DemoNotificationSink()
-db_path = os.getenv("LOT_ZERO_DB_PATH", ":memory:")
+db_path = os.getenv("LOT_ZERO_DB_PATH", str(Path(__file__).resolve().parent.parent.parent / "lot_zero.db"))
 repository = SqliteIncidentRepository(
     db_path=db_path,
     initial_state_factory=create_initial_state,
