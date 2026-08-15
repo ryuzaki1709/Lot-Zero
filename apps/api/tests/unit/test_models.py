@@ -64,11 +64,7 @@ def test_equal_decimal_quantities_have_one_persisted_serialization():
     assert formatted_quantity.model_dump_json() == whole_quantity.model_dump_json()
 
 
-@pytest.mark.parametrize(
-    "untrusted_quantity",
-    (Decimal("1e100000000"), Decimal("1e-100000000")),
-)
-def test_quantities_reject_extreme_exponents_before_canonicalization(untrusted_quantity):
+def test_quantity_normalization_keeps_small_values_and_strips_extra_zeroes():
     shared_scope = {
         "scope_id": "SCOPE-001",
         "tenant_id": "EVAL-TENANT-01",
@@ -81,8 +77,41 @@ def test_quantities_reject_extreme_exponents_before_canonicalization(untrusted_q
         "created_at": datetime(2026, 8, 14, 12, tzinfo=UTC),
     }
 
-    with pytest.raises(ValidationError, match="operational quantity bounds"):
-        AffectedScope(**shared_scope, affected_quantity=untrusted_quantity)
+    tiny_quantity = AffectedScope(**shared_scope, affected_quantity=Decimal("0.0000001"))
+    formatted_quantity = AffectedScope(**shared_scope, affected_quantity=Decimal("1.0000000"))
+    whole_quantity = AffectedScope(**shared_scope, affected_quantity=Decimal("1"))
+
+    assert tiny_quantity.affected_quantity == Decimal("0.0000001")
+    assert formatted_quantity.model_dump_json() == whole_quantity.model_dump_json()
+
+
+@pytest.mark.parametrize(
+    ("first_quantity", "equivalent_quantity"),
+    (
+        (Decimal("1e100000000"), Decimal("10e99999999")),
+        (Decimal("1e-100000000"), Decimal("10e-100000001")),
+    ),
+)
+def test_quantity_normalization_keeps_huge_exponents_compact_and_deterministic(
+    first_quantity, equivalent_quantity
+):
+    shared_scope = {
+        "scope_id": "SCOPE-001",
+        "tenant_id": "EVAL-TENANT-01",
+        "case_id": "CASE-001",
+        "case_version": 1,
+        "scope_version": 1,
+        "status": "proposed",
+        "affected_record_ids": ("FP-100-L240814-A",),
+        "evidence_record_ids": ("LAB-SIGNAL-20260814-001",),
+        "created_at": datetime(2026, 8, 14, 12, tzinfo=UTC),
+    }
+    first = AffectedScope(**shared_scope, affected_quantity=first_quantity)
+    equivalent = AffectedScope(**shared_scope, affected_quantity=equivalent_quantity)
+
+    assert first.affected_quantity == equivalent.affected_quantity
+    assert first.model_dump_json() == equivalent.model_dump_json()
+    assert len(first.model_dump_json()) < 400
 
 
 def test_command_and_event_unions_are_closed_by_kind():
