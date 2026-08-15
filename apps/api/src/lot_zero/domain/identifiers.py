@@ -39,14 +39,38 @@ class ActionIntent(DomainRecord):
     payload_hash: Identifier
 
 
-def _canonical_decimal(value: Decimal) -> dict[str, str]:
+def _canonical_decimal(value: Decimal) -> dict[str, str | int]:
+    """Encode a Decimal in work proportional to its coefficient digits."""
+
     if not value.is_finite():
         raise ValueError("Decimal values must be finite")
-    normalized = value.normalize()
-    rendered = format(normalized, "f")
-    if rendered == "-0":
-        rendered = "0"
-    return {"$lot_zero_type": "decimal", "value": rendered}
+    if value.is_zero():
+        return {
+            "$lot_zero_type": "decimal",
+            "sign": 0,
+            "coefficient": "0",
+            "exponent": 0,
+        }
+
+    decimal_tuple = value.as_tuple()
+    exponent = decimal_tuple.exponent
+    if not isinstance(exponent, int):
+        raise ValueError("Decimal values must be finite")
+
+    digits = decimal_tuple.digits
+    trailing_zeroes = 0
+    for digit in reversed(digits):
+        if digit != 0:
+            break
+        trailing_zeroes += 1
+    canonical_digits = digits[: len(digits) - trailing_zeroes]
+    coefficient = "".join(str(digit) for digit in canonical_digits) or "0"
+    return {
+        "$lot_zero_type": "decimal",
+        "sign": decimal_tuple.sign,
+        "coefficient": coefficient,
+        "exponent": exponent + trailing_zeroes,
+    }
 
 
 def _canonical_datetime(value: datetime) -> dict[str, str]:

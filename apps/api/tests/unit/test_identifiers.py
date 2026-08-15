@@ -1,10 +1,16 @@
+import json
 from datetime import UTC, datetime, timedelta, timezone
 from decimal import Decimal
 
 import pytest
 from pydantic import ValidationError
 
-from lot_zero.domain.identifiers import ActionIntent, action_key, canonical_sha256
+from lot_zero.domain.identifiers import (
+    ActionIntent,
+    _canonical_decimal,
+    action_key,
+    canonical_sha256,
+)
 
 
 def intent_dict() -> dict[str, object]:
@@ -53,3 +59,24 @@ def test_canonical_hash_rejects_naive_and_nonfinite_numbers():
         canonical_sha256(datetime(2026, 8, 14, 12))
     with pytest.raises(ValueError, match="finite"):
         canonical_sha256(Decimal("NaN"))
+
+
+@pytest.mark.parametrize(
+    ("first", "equivalent", "expected_exponent"),
+    (
+        (Decimal("1e100000000"), Decimal("10e99999999"), 100000000),
+        (Decimal("1e-100000000"), Decimal("10e-100000001"), -100000000),
+    ),
+)
+def test_canonical_decimal_hashes_keep_extreme_exponents_compact(
+    first, equivalent, expected_exponent
+):
+    assert canonical_sha256(first) == canonical_sha256(equivalent)
+    encoding = _canonical_decimal(first)
+    assert encoding == {
+        "$lot_zero_type": "decimal",
+        "sign": 0,
+        "coefficient": "1",
+        "exponent": expected_exponent,
+    }
+    assert len(json.dumps(encoding)) < 100
