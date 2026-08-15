@@ -503,6 +503,15 @@ async def approve_containment(
         )
         current_state = res3.state.model_copy(update={"notification_packets": (notif_packet,)})
 
+        all_events = [*res1.events, *res2.events, *res3.events] if 'res1' in locals() else [*res2.events, *res3.events]
+        if all_events:
+            await repository.append(
+                current_state.case.case_id,
+                expected_version=current_state.case.case_version - len(all_events),
+                events=all_events,
+                tenant_id=principal.tenant_id,
+            )
+
         await broadcast_state(current_state)
         return {"status": "approved", "projection": build_incident_projection(current_state)}
 
@@ -552,6 +561,7 @@ async def dispatch_outbox(principal: Principal = Depends(get_current_principal))
             ("ACK-005", "RECIPIENT-005", "verified"),
             ("ACK-006", "RECIPIENT-006", "outstanding"),
         ]
+        all_ack_events = list(res1.events)
         for ack_id, rec_id, status in acks_data:
             ack_cmd = RecordAcknowledgementCommand(
                 kind="record_acknowledgement",
@@ -569,6 +579,15 @@ async def dispatch_outbox(principal: Principal = Depends(get_current_principal))
             if not res_ack.decision.allowed:
                 raise HTTPException(status_code=400, detail=res_ack.decision.explanation)
             current_state = res_ack.state
+            all_ack_events.extend(res_ack.events)
+
+        if all_ack_events:
+            await repository.append(
+                current_state.case.case_id,
+                expected_version=current_state.case.case_version - len(all_ack_events),
+                events=all_ack_events,
+                tenant_id=principal.tenant_id,
+            )
 
         await broadcast_state(current_state)
         return {"status": "outbox_dispatched", "projection": build_incident_projection(current_state)}
@@ -619,6 +638,14 @@ async def resolve_ack(
             raise HTTPException(status_code=400, detail=res_ack.decision.explanation)
         current_state = res_ack.state
 
+        if res_ack.events:
+            await repository.append(
+                current_state.case.case_id,
+                expected_version=current_state.case.case_version - len(res_ack.events),
+                events=res_ack.events,
+                tenant_id=principal.tenant_id,
+            )
+
         await broadcast_state(current_state)
         return {
             "status": "ack_resolved",
@@ -667,6 +694,14 @@ async def release_hold_step(
         if not res.decision.allowed:
             raise HTTPException(status_code=400, detail=res.decision.explanation)
         current_state = res.state
+
+        if res.events:
+            await repository.append(
+                current_state.case.case_id,
+                expected_version=current_state.case.case_version - len(res.events),
+                events=res.events,
+                tenant_id=principal.tenant_id,
+            )
 
         await broadcast_state(current_state)
         return {
@@ -720,6 +755,14 @@ async def close_with_non_response(
 
         updated_case = res.state.case.model_copy(update={"phase": "closed", "updated_at": now})
         current_state = res.state.model_copy(update={"case": updated_case, "updated_at": now})
+
+        if res.events:
+            await repository.append(
+                current_state.case.case_id,
+                expected_version=current_state.case.case_version - len(res.events),
+                events=res.events,
+                tenant_id=principal.tenant_id,
+            )
 
         await broadcast_state(current_state)
         return {
