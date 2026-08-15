@@ -1,7 +1,19 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { X, Cpu, Code2, ShieldCheck, Sparkles } from 'lucide-react';
 
 export function HowItWorksModal({ isOpen, onClose }) {
+  const closeBtnRef = useRef(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    if (closeBtnRef.current) closeBtnRef.current.focus();
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   return (
@@ -37,6 +49,7 @@ export function HowItWorksModal({ isOpen, onClose }) {
       >
         {/* Close Button */}
         <button
+          ref={closeBtnRef}
           onClick={onClose}
           className="btn btn-ghost"
           style={{

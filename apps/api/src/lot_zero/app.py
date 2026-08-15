@@ -185,8 +185,31 @@ async def get_incident(
 
 
 @app.get("/api/incidents/{case_id}/events")
-async def sse_events(case_id: str):
-    """Subscribe to real-time incident state changes via Server-Sent Events."""
+async def sse_events(
+    case_id: str,
+    token: str | None = None,
+    x_api_key: str | None = Header(default=None),
+):
+    """Subscribe to real-time incident state changes via Server-Sent Events.
+    
+    SECURITY AUDIT NOTE:
+    Standard browser EventSource API does not support custom HTTP request headers (such as X-API-Key).
+    To avoid an unauthenticated read stream, authenticated clients supply their API key via the
+    '?token=' query parameter, which is authenticated against the server's principal registry.
+    """
+    key = token or x_api_key
+    if not key:
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication required for SSE stream: Provide a valid token query parameter or X-API-Key header.",
+        )
+    principal = get_principal_for_key(key)
+    if not principal:
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication failed for SSE stream: Invalid token or API key.",
+        )
+
     if case_id != current_state.case.case_id:
         raise HTTPException(status_code=404, detail="Incident case not found")
 
@@ -440,7 +463,7 @@ async def approve_containment(
             )
             res1 = execute_command(current_state, scope_app_cmd, principal, occurred_at=now)
             if not res1.decision.allowed:
-                raise HTTPException(status_code=400, detail=res1.decision.explanation)
+                raise HTTPException(status_code=403, detail=res1.decision.explanation)
             current_state = res1.state
 
         # Approve containment -> converts hold to firm quarantine
@@ -459,7 +482,7 @@ async def approve_containment(
         )
         res2 = execute_command(current_state, hold_app_cmd, principal, occurred_at=now)
         if not res2.decision.allowed:
-            raise HTTPException(status_code=400, detail=res2.decision.explanation)
+            raise HTTPException(status_code=403, detail=res2.decision.explanation)
         current_state = res2.state
 
         # Approve notification so outbox is authorized
@@ -524,8 +547,6 @@ async def dispatch_outbox(principal: Principal = Depends(get_current_principal))
     now = datetime.now(UTC)
 
     async with state_lock:
-        ops_principal = Principal(tenant_id=TENANT_ID, principal_id=principal.principal_id, roles=("customer_operations",))
-
         # 1. Send notification command
         notif_cmd = SendNotificationCommand(
             kind="send_notification",
@@ -548,9 +569,10 @@ async def dispatch_outbox(principal: Principal = Depends(get_current_principal))
                 "RECIPIENT-006",
             ),
         )
-        res1 = execute_command(current_state, notif_cmd, ops_principal, occurred_at=now)
+        res1 = execute_command(current_state, notif_cmd, principal, occurred_at=now)
         if not res1.decision.allowed:
-            raise HTTPException(status_code=400, detail=res1.decision.explanation)
+            status_code = 403 if "lacks" in res1.decision.explanation.lower() or "role" in res1.decision.explanation.lower() else 400
+            raise HTTPException(status_code=status_code, detail=res1.decision.explanation)
         current_state = res1.state
 
         # 2. Record 5 verified acks and 1 outstanding ACK-006
@@ -576,9 +598,10 @@ async def dispatch_outbox(principal: Principal = Depends(get_current_principal))
                 recipient_id=rec_id,
                 acknowledgement_status=status,
             )
-            res_ack = execute_command(current_state, ack_cmd, ops_principal, occurred_at=now)
+            res_ack = execute_command(current_state, ack_cmd, principal, occurred_at=now)
             if not res_ack.decision.allowed:
-                raise HTTPException(status_code=400, detail=res_ack.decision.explanation)
+                status_code = 403 if "lacks" in res_ack.decision.explanation.lower() or "role" in res_ack.decision.explanation.lower() else 400
+                raise HTTPException(status_code=status_code, detail=res_ack.decision.explanation)
             current_state = res_ack.state
             all_ack_events.extend(res_ack.events)
 
@@ -616,7 +639,6 @@ async def resolve_ack(
     attestation_hash = hashlib.sha256(attestation_payload.encode()).hexdigest()
 
     async with state_lock:
-        ops_principal = Principal(tenant_id=TENANT_ID, principal_id=principal.principal_id, roles=("customer_operations",))
         ack_cmd = RecordAcknowledgementCommand(
             kind="record_acknowledgement",
             command_id=f"CMD-ACK-PHONE-ACK-006-{int(now.timestamp())}",
@@ -634,9 +656,10 @@ async def resolve_ack(
             attestation_notes=req.attestation_notes,
             attestation_hash=attestation_hash,
         )
-        res_ack = execute_command(current_state, ack_cmd, ops_principal, occurred_at=now)
+        res_ack = execute_command(current_state, ack_cmd, principal, occurred_at=now)
         if not res_ack.decision.allowed:
-            raise HTTPException(status_code=400, detail=res_ack.decision.explanation)
+            status_code = 403 if "lacks" in res_ack.decision.explanation.lower() or "role" in res_ack.decision.explanation.lower() else 400
+            raise HTTPException(status_code=status_code, detail=res_ack.decision.explanation)
         current_state = res_ack.state
 
         if res_ack.events:
@@ -693,7 +716,8 @@ async def release_hold_step(
         )
         res = execute_command(current_state, rel_cmd, principal, occurred_at=now)
         if not res.decision.allowed:
-            raise HTTPException(status_code=400, detail=res.decision.explanation)
+            status_code = 403 if "lacks" in res.decision.explanation.lower() or "role" in res.decision.explanation.lower() else 400
+            raise HTTPException(status_code=status_code, detail=res.decision.explanation)
         current_state = res.state
 
         if res.events:
@@ -734,7 +758,6 @@ async def close_with_non_response(
         raise HTTPException(status_code=422, detail="Regulatory filing ID and good faith notes are required.")
 
     async with state_lock:
-        closure_principal = Principal(tenant_id=TENANT_ID, principal_id="CLOSURE-AUTH-01", roles=("closure_authority",))
         close_cmd = ApproveClosureCommand(
             kind="approve_closure",
             command_id=f"CMD-CLOSE-NON-RESP-{current_state.case.case_version + 1}",
@@ -750,9 +773,10 @@ async def close_with_non_response(
             non_response_filing_id=req.regulatory_filing_id,
             attempt_count=req.attempt_count,
         )
-        res = execute_command(current_state, close_cmd, closure_principal, occurred_at=now)
+        res = execute_command(current_state, close_cmd, principal, occurred_at=now)
         if not res.decision.allowed:
-            raise HTTPException(status_code=400, detail=res.decision.explanation)
+            status_code = 403 if "lacks" in res.decision.explanation.lower() or "role" in res.decision.explanation.lower() else 400
+            raise HTTPException(status_code=status_code, detail=res.decision.explanation)
 
         updated_case = res.state.case.model_copy(update={"phase": "closed", "updated_at": now})
         current_state = res.state.model_copy(update={"case": updated_case, "updated_at": now})

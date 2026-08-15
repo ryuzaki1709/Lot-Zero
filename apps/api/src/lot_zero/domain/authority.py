@@ -209,6 +209,25 @@ def _authorize_release(
         human_denial = _check_human_approval(command, principal, "qa")
         if human_denial is not None:
             return human_denial
+        # If QA clearance is already recorded, Step 2 requires Closure Authority
+        prior_qa_approval = next(
+            (
+                app
+                for app in state.approvals
+                if app.approval_type == "release"
+                and app.decision == "approved"
+                and app.approver_role == "qa"
+                and app.scope_id == command.scope_id
+                and app.scope_version == command.scope_version
+                and app.retest_doc_hash == command.retest_doc_hash
+            ),
+            None,
+        )
+        if prior_qa_approval is not None:
+            return _deny(
+                "STEP_1_ALREADY_RECORDED",
+                "QA biological clearance already recorded; step 2 requires Closure Authority signature.",
+            )
         return _allow("QA lead may authorize biological re-test clearance", code="ALLOWED_RELEASE_QA_STEP")
 
     # Step 2: Closure / Operational Authority release (requires prior QA approval)

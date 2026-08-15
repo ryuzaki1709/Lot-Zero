@@ -12,13 +12,6 @@ import './styles/antigravity.css';
 
 const API_BASE = '';
 
-// SECURITY NOTE: These evaluation keys match the server's default demo environment in auth.py.
-// For production deployments, keys must NOT be present in client-side code; use server-issued sessions / OAuth.
-const KEY_COORD = 'key-recall-coord-01';
-const KEY_QA = 'key-qa-lead-01';
-const KEY_OPS = 'key-ops-01';
-const KEY_CLOSURE = 'key-closure-auth-01';
-
 export function App() {
   const [currentCaseId, setCurrentCaseId] = useState('EVAL-CASE-01');
   const [activeApiKey, setActiveApiKey] = useState(
@@ -29,14 +22,29 @@ export function App() {
   const [sseConnected, setSseConnected] = useState(false);
   const [isHowItWorksOpen, setIsHowItWorksOpen] = useState(false);
   const [attestationData, setAttestationData] = useState(null);
+  const [feedback, setFeedback] = useState(null); // { type: 'error' | 'success', message: string }
 
   const handleApiKeyChange = (key) => {
     setActiveApiKey(key);
     localStorage.setItem('lot_zero_api_key', key);
+    setFeedback(null);
+  };
+
+  const handleApiError = async (res, defaultAction = 'Action') => {
+    let detail = res.statusText;
+    try {
+      const err = await res.json();
+      detail = err.detail || detail;
+    } catch (_) {}
+    setFeedback({
+      type: 'error',
+      message: `Refused (${res.status}): ${detail}`,
+    });
   };
 
   const handleExportAudit = async () => {
     setLoading(true);
+    setFeedback(null);
     try {
       const res = await fetch(`${API_BASE}/api/cases/${currentCaseId}/audit-export`, {
         headers: { 'X-API-Key': activeApiKey },
@@ -52,18 +60,18 @@ export function App() {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
+        setFeedback({ type: 'success', message: 'Audit export bundle downloaded successfully.' });
       } else {
-        const err = await res.json();
-        alert(`Audit export failed (${res.status}): ${err.detail || res.statusText}`);
+        await handleApiError(res, 'Audit export');
       }
     } catch (err) {
-      alert(`Audit export network error: ${err.message}`);
+      setFeedback({ type: 'error', message: `Network error: ${err.message}` });
     } finally {
       setLoading(false);
     }
   };
 
-  // Fetch initial projection and subscribe to SSE
+  // Fetch initial projection and subscribe to SSE with authenticated token parameter
   useEffect(() => {
     let eventSource;
 
@@ -75,6 +83,8 @@ export function App() {
         if (res.ok) {
           const data = await res.json();
           setProjection(data);
+        } else {
+          await handleApiError(res, 'Fetch incident');
         }
       } catch (err) {
         console.warn('API connecting... using initial baseline');
@@ -84,7 +94,10 @@ export function App() {
     fetchInitial();
 
     try {
-      eventSource = new EventSource(`${API_BASE}/api/incidents/${currentCaseId}/events`);
+      // EventSource cannot send custom HTTP headers; passes authenticated token query parameter
+      eventSource = new EventSource(
+        `${API_BASE}/api/incidents/${currentCaseId}/events?token=${encodeURIComponent(activeApiKey)}`
+      );
       eventSource.onopen = () => {
         setSseConnected(true);
       };
@@ -110,6 +123,7 @@ export function App() {
 
   const handleSimulateSignal = async () => {
     setLoading(true);
+    setFeedback(null);
     try {
       const res = await fetch(`${API_BASE}/api/evaluation/simulate-signal`, {
         method: 'POST',
@@ -118,9 +132,12 @@ export function App() {
       if (res.ok) {
         const data = await res.json();
         if (data.projection) setProjection(data.projection);
+        setFeedback({ type: 'success', message: 'Safety signal simulated and parsed via Gemini.' });
+      } else {
+        await handleApiError(res, 'Simulate signal');
       }
     } catch (err) {
-      console.error(err);
+      setFeedback({ type: 'error', message: `Network error: ${err.message}` });
     } finally {
       setLoading(false);
     }
@@ -128,21 +145,25 @@ export function App() {
 
   const handleApproveContainment = async (rationale) => {
     setLoading(true);
+    setFeedback(null);
     try {
       const res = await fetch(`${API_BASE}/api/evaluation/approve-containment`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-API-Key': activeApiKey === 'key-qa-lead-01' ? activeApiKey : KEY_QA,
+          'X-API-Key': activeApiKey,
         },
-        body: JSON.stringify({ role: 'qa', rationale }),
+        body: JSON.stringify({ rationale }),
       });
       if (res.ok) {
         const data = await res.json();
         if (data.projection) setProjection(data.projection);
+        setFeedback({ type: 'success', message: 'Firm quarantine approved by QA Lead.' });
+      } else {
+        await handleApiError(res, 'Approve containment');
       }
     } catch (err) {
-      console.error(err);
+      setFeedback({ type: 'error', message: `Network error: ${err.message}` });
     } finally {
       setLoading(false);
     }
@@ -150,17 +171,21 @@ export function App() {
 
   const handleDispatchOutbox = async () => {
     setLoading(true);
+    setFeedback(null);
     try {
       const res = await fetch(`${API_BASE}/api/evaluation/dispatch-outbox`, {
         method: 'POST',
-        headers: { 'X-API-Key': activeApiKey === 'key-ops-01' ? activeApiKey : KEY_OPS },
+        headers: { 'X-API-Key': activeApiKey },
       });
       if (res.ok) {
         const data = await res.json();
         if (data.projection) setProjection(data.projection);
+        setFeedback({ type: 'success', message: 'Recall notification packet dispatched to consignees.' });
+      } else {
+        await handleApiError(res, 'Dispatch outbox');
       }
     } catch (err) {
-      console.error(err);
+      setFeedback({ type: 'error', message: `Network error: ${err.message}` });
     } finally {
       setLoading(false);
     }
@@ -168,22 +193,32 @@ export function App() {
 
   const handleResolveAck = async (payload) => {
     setLoading(true);
+    setFeedback(null);
     try {
       const res = await fetch(`${API_BASE}/api/evaluation/resolve-ack`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-API-Key': activeApiKey === 'key-ops-01' ? activeApiKey : KEY_OPS,
+          'X-API-Key': activeApiKey,
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          caller_id: payload.caller_id,
+          recipient_contact: payload.recipient_contact,
+          recipient_phone: payload.recipient_phone,
+          call_timestamp: payload.call_timestamp,
+          attestation_notes: payload.attestation_notes,
+        }),
       });
       if (res.ok) {
         const data = await res.json();
         setAttestationData(data);
         if (data.projection) setProjection(data.projection);
+        setFeedback({ type: 'success', message: 'Phone attestation signed and recorded into audit ledger.' });
+      } else {
+        await handleApiError(res, 'Resolve acknowledgement');
       }
     } catch (err) {
-      console.error(err);
+      setFeedback({ type: 'error', message: `Network error: ${err.message}` });
     } finally {
       setLoading(false);
     }
@@ -191,67 +226,65 @@ export function App() {
 
   const handleRequestClosure = async () => {
     setLoading(true);
+    setFeedback(null);
     try {
       const res = await fetch(`${API_BASE}/api/evaluation/request-closure`, {
         method: 'POST',
-        headers: { 'X-API-Key': activeApiKey === 'key-closure-auth-01' ? activeApiKey : KEY_CLOSURE },
+        headers: { 'X-API-Key': activeApiKey },
       });
       if (res.ok) {
         const data = await res.json();
         if (data.projection) setProjection(data.projection);
+        if (data.blocked) {
+          setFeedback({
+            type: 'error',
+            message: `Refused: Closure blocked — unverified consignee acknowledgements remain (${(data.outstanding_acknowledgements || []).join(', ') || 'ACK-006'}).`,
+          });
+        } else {
+          setFeedback({ type: 'success', message: 'Incident case closed successfully.' });
+        }
+      } else {
+        await handleApiError(res, 'Request closure');
       }
     } catch (err) {
-      console.error(err);
+      setFeedback({ type: 'error', message: `Network error: ${err.message}` });
     } finally {
       setLoading(false);
     }
   };
 
+  // Perform exactly ONE release step per invocation, signed by the active role
   const handleReleaseHold = async (payload) => {
     setLoading(true);
+    setFeedback(null);
     try {
-      // Step 1: QA Lead biological clearance signature
-      const res1 = await fetch(`${API_BASE}/api/evaluation/release-hold/step`, {
+      const res = await fetch(`${API_BASE}/api/evaluation/release-hold/step`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-API-Key': KEY_QA,
+          'X-API-Key': activeApiKey,
         },
         body: JSON.stringify({
           retest_doc_id: payload.retest_doc_id,
           retest_doc_hash: payload.retest_doc_hash,
-          role: 'qa',
-          principal_id: 'QA-LEAD-01',
-          rationale: payload.qa_rationale,
+          rationale: payload.rationale,
         }),
       });
-      if (!res1.ok) {
-        const err = await res1.json();
-        console.error('QA Step Error:', err);
-        return;
-      }
-
-      // Step 2: Closure Authority operational un-hold signature
-      const res2 = await fetch(`${API_BASE}/api/evaluation/release-hold/step`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-API-Key': KEY_CLOSURE,
-        },
-        body: JSON.stringify({
-          retest_doc_id: payload.retest_doc_id,
-          retest_doc_hash: payload.retest_doc_hash,
-          role: 'closure_authority',
-          principal_id: 'CLOSURE-AUTH-01',
-          rationale: payload.coordinator_rationale,
-        }),
-      });
-      if (res2.ok) {
-        const data = await res2.json();
+      if (res.ok) {
+        const data = await res.json();
         if (data.projection) setProjection(data.projection);
+        setFeedback({
+          type: 'success',
+          message:
+            data.role === 'qa'
+              ? 'Step 1 complete: QA Lead biological clearance signed. Switch role to Closure Authority for Step 2.'
+              : 'Step 2 complete: Operational inventory release authorized and hold archived.',
+        });
+      } else {
+        await handleApiError(res, 'Release step');
       }
     } catch (err) {
-      console.error(err);
+      setFeedback({ type: 'error', message: `Network error: ${err.message}` });
     } finally {
       setLoading(false);
     }
@@ -259,26 +292,32 @@ export function App() {
 
   const handleCloseWithNonResponse = async (payload) => {
     setLoading(true);
+    setFeedback(null);
     try {
       const res = await fetch(`${API_BASE}/api/evaluation/close-with-non-response`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-API-Key': KEY_CLOSURE,
+          'X-API-Key': activeApiKey,
         },
         body: JSON.stringify({
-          principal_id: 'CLOSURE-AUTH-01',
-          attempt_count: 3,
-          regulatory_filing_id: payload?.regulatory_filing_id || 'FDA-DISTRICT-ESCALATION-2026-08-01',
-          good_faith_notes: payload?.good_faith_notes || 'Documented 3 verified contact attempts to RECIPIENT-006 (phone, certified email, courier delivery). Consignee non-responsive. Referral filed with FDA District Office under 21 CFR § 7.49.',
+          attempt_count: payload.attempt_count,
+          regulatory_filing_id: payload.regulatory_filing_id,
+          good_faith_notes: payload.good_faith_notes,
         }),
       });
       if (res.ok) {
         const data = await res.json();
         if (data.projection) setProjection(data.projection);
+        setFeedback({
+          type: 'success',
+          message: 'Incident closed under 21 CFR § 7.49 with certified non-response and FDA referral.',
+        });
+      } else {
+        await handleApiError(res, 'Non-response closure');
       }
     } catch (err) {
-      console.error(err);
+      setFeedback({ type: 'error', message: `Network error: ${err.message}` });
     } finally {
       setLoading(false);
     }
@@ -286,6 +325,7 @@ export function App() {
 
   const handleReset = async () => {
     setLoading(true);
+    setFeedback(null);
     try {
       const res = await fetch(`${API_BASE}/api/evaluation/reset`, {
         method: 'POST',
@@ -295,9 +335,12 @@ export function App() {
         const data = await res.json();
         setAttestationData(null);
         if (data.projection) setProjection(data.projection);
+        setFeedback({ type: 'success', message: 'Incident baseline reset cleanly.' });
+      } else {
+        await handleApiError(res, 'Reset baseline');
       }
     } catch (err) {
-      console.error(err);
+      setFeedback({ type: 'error', message: `Network error: ${err.message}` });
     } finally {
       setLoading(false);
     }
@@ -312,7 +355,9 @@ export function App() {
   const approvals = projection?.approvals;
   const ledgerCount = projection?.ledger_count;
   const modelName = projection?.runtime?.model?.value;
-  const isQaApproved = approvals?.some((a) => a.decision === 'approved' && a.approval_type === 'containment');
+  const isQaApproved = approvals?.some(
+    (a) => a.decision === 'approved' && a.approval_type === 'containment'
+  );
 
   return (
     <div style={{ minHeight: '100vh', paddingBottom: '32px', maxWidth: '1600px', margin: '0 auto' }}>
@@ -330,16 +375,19 @@ export function App() {
         sseConnected={sseConnected}
       />
 
-      <CaseDashboard
-        currentCaseId={currentCaseId}
-        onSelectCase={(id) => setCurrentCaseId(id)}
-        activePhase={phase}
-        approvals={approvals}
-        containmentActions={projection?.containment_actions}
-        apiKey={activeApiKey}
-      />
-
       <StageProgress phase={phase} metrics={metrics} closureGate={closureGate} />
+
+      {/* Group 4a: Context selection (CaseDashboard) directly under StageProgress */}
+      <div style={{ margin: '0 24px 16px' }}>
+        <CaseDashboard
+          currentCaseId={currentCaseId}
+          onSelectCase={(id) => setCurrentCaseId(id)}
+          activePhase={phase}
+          approvals={approvals}
+          containmentActions={projection?.containment_actions}
+          apiKey={activeApiKey}
+        />
+      </div>
 
       {/* Main Operational 3-Column Cockpit */}
       <main
@@ -351,12 +399,56 @@ export function App() {
           alignItems: 'start',
         }}
       >
+        {/* Global Denial/Error Surface (Group 1c) */}
+        {feedback && (
+          <div
+            style={{
+              gridColumn: '1 / -1',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '10px 14px',
+              borderRadius: 'var(--radius-md)',
+              background:
+                feedback.type === 'error'
+                  ? 'var(--status-danger-subtle)'
+                  : 'var(--status-success-subtle)',
+              border: `1px solid ${
+                feedback.type === 'error'
+                  ? 'rgba(239, 68, 68, 0.3)'
+                  : 'rgba(34, 197, 94, 0.3)'
+              }`,
+              color:
+                feedback.type === 'error'
+                  ? 'var(--status-danger-text)'
+                  : 'var(--status-success-text)',
+              fontSize: '13px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span
+                className={`status-dot ${
+                  feedback.type === 'error' ? 'status-dot-danger' : 'status-dot-success'
+                }`}
+              />
+              <span style={{ fontWeight: 500 }}>{feedback.message}</span>
+            </div>
+            <button
+              className="btn btn-ghost"
+              style={{ padding: '2px 6px', fontSize: '11px', color: 'inherit' }}
+              onClick={() => setFeedback(null)}
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
         {/* Column 1: Signal Ingestion & Citations */}
         <section style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <SignalViewer signal={signal} scopes={projection?.scopes} modelName={modelName} />
         </section>
 
-        {/* Column 2: Bidirectional DAG & Dual Human Decision Gate */}
+        {/* Column 2: Bidirectional DAG & Decision Gates */}
         <section style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <GenealogyGraph
             genealogy={genealogy}
@@ -375,6 +467,7 @@ export function App() {
             loading={loading}
             approvals={approvals}
             closureGate={closureGate}
+            containmentActions={projection?.containment_actions}
           />
         </section>
 
