@@ -28,4 +28,12 @@ def test_projection_requires_backing_record_ids(schema):
     projection = minimal_projection()
     projection["header"]["record_ids"] = []
     with pytest.raises(jsonschema.ValidationError):
-        jsonschema.validate(projection, schema["$defs"]["IncidentProjection"])
+        jsonschema.validate(projection, schema)
+
+
+def test_projection_rejects_decorative_runtime_facts(schema):
+    projection = minimal_projection()
+    projection["runtime"] = {"model": "decorative fact"}
+
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate(projection, schema)

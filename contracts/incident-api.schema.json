@@ -3,6 +3,7 @@
   "$id": "https://lot-zero.local/contracts/incident-api/v1",
   "title": "Lot Zero Incident API v1",
   "description": "Versioned, record-backed wire contract for the local evaluation API.",
+  "$ref": "#/$defs/IncidentProjection",
   "$defs": {
     "RecordIds": {
       "type": "array",
@@ -72,16 +73,44 @@
       "required": ["case_id", "phase", "environment_notice", "record_ids"],
       "additionalProperties": false
     },
+    "RuntimeMetadata": {
+      "type": "object",
+      "description": "Runtime facts are either record-backed values or explicitly unavailable.",
+      "properties": {
+        "model": {
+          "$ref": "#/$defs/Availability"
+        },
+        "run_id": {
+          "$ref": "#/$defs/Availability"
+        },
+        "revision": {
+          "$ref": "#/$defs/Availability"
+        },
+        "message_id": {
+          "$ref": "#/$defs/Availability"
+        },
+        "correlation_id": {
+          "$ref": "#/$defs/Availability"
+        },
+        "trace_id": {
+          "$ref": "#/$defs/Availability"
+        }
+      },
+      "additionalProperties": false
+    },
     "IncidentProjection": {
       "type": "object",
       "description": "Read model consumed by the TypeScript client. Every visible value is record-backed or uses Availability.",
       "properties": {
         "header": {
           "$ref": "#/$defs/IncidentHeader"
+        },
+        "runtime": {
+          "$ref": "#/$defs/RuntimeMetadata"
         }
       },
       "required": ["header"],
-      "additionalProperties": true
+      "additionalProperties": false
     },
     "CommandResponse": {
       "type": "object",
