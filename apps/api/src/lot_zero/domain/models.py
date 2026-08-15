@@ -130,6 +130,12 @@ class ContainmentAction(DomainRecord):
     quantity: NonNegativeQuantity
     policy_version: Identifier
     requested_at: datetime
+    # Retry identity and reconciliation state. Optional so pre-existing constructions
+    # remain valid; the kernel populates them when it reserves and drives an action.
+    idempotency_token: Identifier | None = None
+    payload_hash: Identifier | None = None
+    provider_reference: Identifier | None = None
+    attempt: NonNegativeVersion = 0
 
 
 class ApprovalDecision(DomainRecord):

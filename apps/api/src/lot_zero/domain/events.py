@@ -7,7 +7,7 @@ from typing import Annotated, Literal
 
 from pydantic import Field, TypeAdapter
 
-from .models import DomainRecord, Identifier, NonNegativeVersion
+from .models import ContainmentAction, DomainRecord, Identifier, NonNegativeVersion
 
 
 class EventRecord(DomainRecord):
@@ -59,12 +59,26 @@ class ClosureRequestedEvent(EventRecord):
     outstanding_acknowledgement_ids: tuple[Identifier, ...] = ()
 
 
+class ContainmentAttemptedEvent(EventRecord):
+    """One persisted attempt at a reserved containment action.
+
+    The event carries the full, authentic ``ContainmentAction`` snapshot the kernel
+    computed for this attempt (quantity, targets, payload hash, and idempotency token
+    all derive from the approved ``ActionIntent`` — never a fabricated value). The
+    reducer upserts the action by ``action_id`` so replays are deterministic.
+    """
+
+    kind: Literal["containment_attempted"]
+    action: ContainmentAction
+
+
 type EventValue = Annotated[
     ScopeProposedEvent
     | ContainmentRequestedEvent
     | NotificationRequestedEvent
     | AcknowledgementRecordedEvent
-    | ClosureRequestedEvent,
+    | ClosureRequestedEvent
+    | ContainmentAttemptedEvent,
     Field(discriminator="kind"),
 ]
 Event = TypeAdapter(EventValue)
