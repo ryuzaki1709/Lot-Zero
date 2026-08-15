@@ -1,0 +1,8 @@
+{
+  "files": {
+    "golden.json": "b3d636c0c2c1c94924202f5ebe12d970d9db180c2a538a3d92384bde092d72aa",
+    "operations.json": "791fb2aac28869f3ccca37ead9847c38ae422a20c0252053b6a3b75065af52a3",
+    "signal.json": "3b90569867dcc246bbfc6169e571cec6bf4b93f211b44d5ef0d20a2ab926e8c2"
+  },
+  "fixture_version": "evaluation-tenant-v1"
+}

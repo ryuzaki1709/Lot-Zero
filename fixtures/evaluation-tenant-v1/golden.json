@@ -1,0 +1,16 @@
+{
+  "affected_inventory_quantity": 200,
+  "affected_operational_record_ids": [
+    "FP-100-L240814-A",
+    "FP-100-L240814-B"
+  ],
+  "affected_shipped_quantity": 70,
+  "outstanding_acknowledgement_ids": [
+    "ACK-006"
+  ],
+  "provisional_hold_quantity": 200,
+  "unaffected_hold_quantity": 0,
+  "unresolved_genealogy_edge_ids": [
+    "EDGE-BROKEN-01"
+  ]
+}

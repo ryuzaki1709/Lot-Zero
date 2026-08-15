@@ -1,0 +1,38 @@
+{
+  "acknowledgements": [
+    {"acknowledgement_id": "ACK-001", "recipient_id": "RECIPIENT-001", "status": "verified"},
+    {"acknowledgement_id": "ACK-002", "recipient_id": "RECIPIENT-002", "status": "verified"},
+    {"acknowledgement_id": "ACK-003", "recipient_id": "RECIPIENT-003", "status": "verified"},
+    {"acknowledgement_id": "ACK-004", "recipient_id": "RECIPIENT-004", "status": "verified"},
+    {"acknowledgement_id": "ACK-005", "recipient_id": "RECIPIENT-005", "status": "verified"},
+    {"acknowledgement_id": "ACK-006", "recipient_id": "RECIPIENT-006", "status": "outstanding"}
+  ],
+  "affected_finished_lots": [
+    {"lot_id": "FP-100-L240814-A", "product_id": "FP-100", "quantity": 120, "source_ingredient_lot": "ING-4417"},
+    {"lot_id": "FP-100-L240814-B", "product_id": "FP-100", "quantity": 80, "source_ingredient_lot": "ING-4417"}
+  ],
+  "adjacent_unaffected_batch": {
+    "ingredient_lot": "ING-4418",
+    "lot_id": "FP-100-ADJ",
+    "product_id": "FP-100",
+    "quantity": 100
+  },
+  "genealogy_edges": [
+    {"edge_id": "EDGE-FP-100-A-01", "source_id": "ING-4417", "target_id": "FP-100-L240814-A"},
+    {"edge_id": "EDGE-FP-100-B-01", "source_id": "ING-4417", "target_id": "FP-100-L240814-B"},
+    {"edge_id": "EDGE-BROKEN-01", "source_id": "ING-4417", "target_id": "TRANSFORM-MISSING-01"}
+  ],
+  "operational_controls": {
+    "closure_id": "EVAL-CLOSE-01",
+    "provisional_hold_id": "EVAL-HOLD-01"
+  },
+  "recipients": [
+    {"recipient_id": "RECIPIENT-001"},
+    {"recipient_id": "RECIPIENT-002"},
+    {"recipient_id": "RECIPIENT-003"},
+    {"recipient_id": "RECIPIENT-004"},
+    {"recipient_id": "RECIPIENT-005"},
+    {"recipient_id": "RECIPIENT-006"}
+  ],
+  "shipped_quantity": 70
+}
