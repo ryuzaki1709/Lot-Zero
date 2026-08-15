@@ -107,16 +107,45 @@ Open `http://localhost:5173` in your browser.
 
 ---
 
-## 5. Automated Test Suite
+## 5. Google Cloud Deployment (Cloud Run + GCS FUSE + Secret Manager)
 
-Run the full pytest suite (118 tests covering contracts, SQLite optimistic concurrency, replay equivalence, tenant isolation, dual-signature release, and audit tamper detection):
+Lot Zero runs in a single unified multi-stage container on **Google Cloud Run**, mounting **Google Cloud Storage (GCS FUSE)** for persistent event sourcing and utilizing **Secret Manager** for credential hygiene.
+
+For full GCP deployment commands and the video proof pack, see [docs/deployment.md](docs/deployment.md).
+
+```bash
+# Deploy to Google Cloud Run (us-central1) with GCS Volume Mount and Secret Manager
+gcloud run deploy lot-zero \
+    --source=. \
+    --region=us-central1 \
+    --platform=managed \
+    --allow-unauthenticated \
+    --min-instances=0 \
+    --max-instances=2 \
+    --memory=512Mi \
+    --set-env-vars="LOT_ZERO_DB_PATH=/app/data/lot_zero.db,LOT_ZERO_TENANT_ID=EVAL-TENANT-01" \
+    --set-secrets="GEMINI_API_KEY=gemini-api-key:latest,LOT_ZERO_SSE_SECRET=lot-zero-sse-secret:latest" \
+    --add-volume=name=event-store-vol,type=cloud-storage,bucket=lot-zero-events-production \
+    --add-volume-mount=volume=event-store-vol,mount-path=/app/data
+```
+
+Verify the live deployment with the smoke-test script:
+```bash
+python scripts/verify_cloud_deploy.py https://lot-zero-76812879581-uc.a.run.app
+```
+
+---
+
+## 6. Automated Test Suite
+
+Run the full pytest suite (119 tests covering contracts, SQLite optimistic concurrency, replay equivalence, tenant isolation, dual-signature release, HMAC SSE stream tokens, and audit tamper detection):
 
 ```powershell
 cd apps/api
 & .venv/Scripts/python.exe -m pytest tests/
 ```
 ```
-======================= 118 passed in 1.00s =======================
+======================= 119 passed, 1 warning in 1.00s =======================
 ```
 
 Build the web application:
@@ -125,5 +154,5 @@ cd apps/web
 npm run build
 ```
 ```
-✓ built in 1.19s (0 errors)
+✓ built in 1.09s (0 errors)
 ```

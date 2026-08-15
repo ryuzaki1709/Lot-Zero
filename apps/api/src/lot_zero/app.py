@@ -14,7 +14,8 @@ from typing import Annotated, Any, Literal
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, StringConstraints
 
 from .adapters.demo_sink import DemoNotificationSink
@@ -871,3 +872,34 @@ async def request_closure(principal: Principal = Depends(get_current_principal))
             "blocked": False,
             "projection": build_incident_projection(current_state),
         }
+
+
+# ============================================================================
+# Static Frontend Assets & SPA Fallback Route (Cloud Run & Local Multi-Stage)
+# ============================================================================
+web_dist_candidates = [
+    Path("/app/apps/web/dist/client"),
+    Path("/app/apps/web/dist"),
+    Path("/app/web/dist/client"),
+    Path("/app/web/dist"),
+    Path(__file__).resolve().parents[3] / "web" / "dist" / "client",
+    Path(__file__).resolve().parents[3] / "web" / "dist",
+    Path(__file__).resolve().parents[4] / "apps" / "web" / "dist" / "client",
+    Path(__file__).resolve().parents[4] / "apps" / "web" / "dist",
+]
+static_dir = next((p for p in web_dist_candidates if p.exists() and (p / "index.html").exists()), None)
+
+if static_dir:
+    assets_dir = static_dir / "assets"
+    if assets_dir.exists():
+        app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
+
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        # Let explicit API routes pass through or 404
+        if full_path.startswith("api/"):
+            raise HTTPException(status_code=404, detail=f"API endpoint '/{full_path}' not found")
+        file_path = static_dir / full_path
+        if file_path.is_file():
+            return FileResponse(file_path)
+        return FileResponse(static_dir / "index.html")

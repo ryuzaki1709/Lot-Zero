@@ -1,6 +1,6 @@
-# Multi-stage Docker build for Lot Zero
+# Multi-stage Docker build for Lot Zero (Cloud Run + GCS Volume persistent SQLite)
 
-# Stage 1: Build React Frontend
+# Stage 1: Build React Frontend (Vite)
 FROM node:20-alpine AS frontend-builder
 WORKDIR /app/web
 COPY apps/web/package*.json ./
@@ -14,27 +14,28 @@ WORKDIR /app
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    LOT_ZERO_DB_PATH=/app/data/lot_zero.db
+    LOT_ZERO_DB_PATH=/app/data/lot_zero.db \
+    PORT=8080
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
+# Install Python dependencies & package in editable/wheel mode
 COPY apps/api/pyproject.toml apps/api/
 RUN pip install --no-cache-dir ./apps/api
 
 # Copy API application source
 COPY apps/api /app/apps/api
 
-# Copy built frontend assets to static mount
+# Copy built frontend assets to static mount location
 COPY --from=frontend-builder /app/web/dist /app/apps/web/dist
 
-# Create storage volume directory
+# Create storage volume mount directory for Cloud Storage (gcsfuse)
 RUN mkdir -p /app/data
 
-EXPOSE 8000
+EXPOSE 8080
 
 WORKDIR /app/apps/api
-CMD ["uvicorn", "lot_zero.app:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", "uvicorn lot_zero.app:app --host 0.0.0.0 --port ${PORT:-8080}"]
