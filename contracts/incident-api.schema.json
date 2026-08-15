@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lot-zero.local/contracts/incident-api/v1",
+  "title": "Lot Zero Incident API v1",
+  "description": "Versioned, record-backed wire contract for the local evaluation API.",
+  "$defs": {
+    "RecordIds": {
+      "type": "array",
+      "description": "Stable IDs of records that substantiate a visible value.",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "Availability": {
+      "description": "A value is either backed by scenario/runtime records or explicitly unavailable.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "available"
+            },
+            "value": {},
+            "record_ids": {
+              "$ref": "#/$defs/RecordIds"
+            }
+          },
+          "required": ["kind", "value", "record_ids"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "unavailable"
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1
+            },
+            "status_record_id": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": ["kind", "reason", "status_record_id"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "IncidentHeader": {
+      "type": "object",
+      "properties": {
+        "case_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "phase": {
+          "type": "string",
+          "minLength": 1
+        },
+        "environment_notice": {
+          "const": "Evaluation tenant · synthetic records · no real outreach"
+        },
+        "record_ids": {
+          "$ref": "#/$defs/RecordIds"
+        }
+      },
+      "required": ["case_id", "phase", "environment_notice", "record_ids"],
+      "additionalProperties": false
+    },
+    "IncidentProjection": {
+      "type": "object",
+      "description": "Read model consumed by the TypeScript client. Every visible value is record-backed or uses Availability.",
+      "properties": {
+        "header": {
+          "$ref": "#/$defs/IncidentHeader"
+        }
+      },
+      "required": ["header"],
+      "additionalProperties": true
+    },
+    "CommandResponse": {
+      "type": "object",
+      "properties": {
+        "command_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "case_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "record_ids": {
+          "$ref": "#/$defs/RecordIds"
+        },
+        "projection": {
+          "$ref": "#/$defs/IncidentProjection"
+        }
+      },
+      "required": ["command_id", "case_id", "status", "record_ids"],
+      "additionalProperties": false
+    }
+  }
+}
