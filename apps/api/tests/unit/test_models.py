@@ -64,6 +64,27 @@ def test_equal_decimal_quantities_have_one_persisted_serialization():
     assert formatted_quantity.model_dump_json() == whole_quantity.model_dump_json()
 
 
+@pytest.mark.parametrize(
+    "untrusted_quantity",
+    (Decimal("1e100000000"), Decimal("1e-100000000")),
+)
+def test_quantities_reject_extreme_exponents_before_canonicalization(untrusted_quantity):
+    shared_scope = {
+        "scope_id": "SCOPE-001",
+        "tenant_id": "EVAL-TENANT-01",
+        "case_id": "CASE-001",
+        "case_version": 1,
+        "scope_version": 1,
+        "status": "proposed",
+        "affected_record_ids": ("FP-100-L240814-A",),
+        "evidence_record_ids": ("LAB-SIGNAL-20260814-001",),
+        "created_at": datetime(2026, 8, 14, 12, tzinfo=UTC),
+    }
+
+    with pytest.raises(ValidationError, match="operational quantity bounds"):
+        AffectedScope(**shared_scope, affected_quantity=untrusted_quantity)
+
+
 def test_command_and_event_unions_are_closed_by_kind():
     command = Command.validate_python(
         {

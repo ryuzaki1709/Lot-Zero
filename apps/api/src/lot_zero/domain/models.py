@@ -17,16 +17,40 @@ from pydantic import (
 
 Identifier = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 NonNegativeVersion = Annotated[int, Field(ge=0)]
+MAX_QUANTITY_INTEGER_DIGITS = 12
+MAX_QUANTITY_DECIMAL_PLACES = 6
 
 
 def _normalize_quantity(value: Decimal) -> Decimal:
-    """Store mathematically equal quantities with one Decimal exponent."""
+    """Bound and normalize food quantities without expanding untrusted exponents.
+
+    Operational quantities allow up to twelve integer digits and six fractional
+    digits. These bounds cover unit, mass, and volume quantities while keeping
+    API-facing Decimal normalization bounded before persistence.
+    """
 
     if not value.is_finite():
         raise ValueError("quantities must be finite")
     if value == 0:
         return Decimal("0")
-    return Decimal(format(value.normalize(), "f"))
+    decimal_tuple = value.as_tuple()
+    exponent = decimal_tuple.exponent
+    if not isinstance(exponent, int):
+        raise ValueError("quantities must be finite")
+    if (
+        exponent < -MAX_QUANTITY_DECIMAL_PLACES
+        or exponent + len(decimal_tuple.digits) > MAX_QUANTITY_INTEGER_DIGITS
+    ):
+        raise ValueError("quantity exceeds operational quantity bounds")
+    normalized = value.normalize()
+    normalized_exponent = normalized.as_tuple().exponent
+    if (
+        not isinstance(normalized_exponent, int)
+        or normalized_exponent < -MAX_QUANTITY_DECIMAL_PLACES
+        or normalized.adjusted() >= MAX_QUANTITY_INTEGER_DIGITS
+    ):
+        raise ValueError("quantity exceeds operational quantity bounds")
+    return normalized
 
 
 NonNegativeQuantity = Annotated[
