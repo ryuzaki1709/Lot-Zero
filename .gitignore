@@ -11,5 +11,7 @@ coverage/
 .firestore/
 .pubsub/
 .superpowers/
+.pytest-tmp/
+__pycache__/
+*.py[cod]
 *.log
-
