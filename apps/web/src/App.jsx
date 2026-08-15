@@ -71,9 +71,11 @@ export function App() {
     }
   };
 
-  // Fetch initial projection and subscribe to SSE with authenticated token parameter
+  // Fetch initial projection and subscribe to SSE with short-lived HMAC token
   useEffect(() => {
-    let eventSource;
+    let eventSource = null;
+    let isCancelled = false;
+    let reconnectTimeout = null;
 
     const fetchInitial = async () => {
       try {
@@ -82,9 +84,9 @@ export function App() {
         });
         if (res.ok) {
           const data = await res.json();
-          setProjection(data);
+          if (!isCancelled) setProjection(data);
         } else {
-          await handleApiError(res, 'Fetch incident');
+          if (!isCancelled) await handleApiError(res, 'Fetch incident');
         }
       } catch (err) {
         console.warn('API connecting... using initial baseline');
@@ -93,30 +95,53 @@ export function App() {
 
     fetchInitial();
 
-    try {
-      // EventSource cannot send custom HTTP headers; passes authenticated token query parameter
-      eventSource = new EventSource(
-        `${API_BASE}/api/incidents/${currentCaseId}/events?token=${encodeURIComponent(activeApiKey)}`
-      );
-      eventSource.onopen = () => {
-        setSseConnected(true);
-      };
-      eventSource.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          setProjection(data);
-        } catch (e) {
-          console.error('Error parsing SSE payload', e);
+    const connectSSE = async () => {
+      try {
+        const tokenRes = await fetch(`${API_BASE}/api/sse-token`, {
+          method: 'POST',
+          headers: { 'X-API-Key': activeApiKey },
+        });
+        if (!tokenRes.ok) {
+          if (!isCancelled) setSseConnected(false);
+          return;
         }
-      };
-      eventSource.onerror = () => {
-        setSseConnected(false);
-      };
-    } catch (e) {
-      console.warn('EventSource initialization error', e);
-    }
+        const tokenData = await tokenRes.json();
+        if (isCancelled) return;
+
+        eventSource = new EventSource(
+          `${API_BASE}/api/incidents/${currentCaseId}/events?token=${encodeURIComponent(tokenData.token)}`
+        );
+        eventSource.onopen = () => {
+          if (!isCancelled) setSseConnected(true);
+        };
+        eventSource.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (!isCancelled) setProjection(data);
+          } catch (e) {
+            console.error('Error parsing SSE payload', e);
+          }
+        };
+        eventSource.onerror = () => {
+          if (!isCancelled) setSseConnected(false);
+          if (eventSource) {
+            eventSource.close();
+            eventSource = null;
+          }
+          if (!isCancelled) {
+            reconnectTimeout = setTimeout(connectSSE, 3000);
+          }
+        };
+      } catch (e) {
+        if (!isCancelled) setSseConnected(false);
+      }
+    };
+
+    connectSSE();
 
     return () => {
+      isCancelled = true;
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
       if (eventSource) eventSource.close();
     };
   }, [currentCaseId, activeApiKey]);
@@ -236,9 +261,13 @@ export function App() {
         const data = await res.json();
         if (data.projection) setProjection(data.projection);
         if (data.blocked) {
+          const blockingStr =
+            data.outstanding_acknowledgements && data.outstanding_acknowledgements.length > 0
+              ? data.outstanding_acknowledgements.join(', ')
+              : 'outstanding consignee acknowledgement';
           setFeedback({
             type: 'error',
-            message: `Refused: Closure blocked — unverified consignee acknowledgements remain (${(data.outstanding_acknowledgements || []).join(', ') || 'ACK-006'}).`,
+            message: `Refused: Closure blocked — unverified consignee acknowledgements remain (${blockingStr}).`,
           });
         } else {
           setFeedback({ type: 'success', message: 'Incident case closed successfully.' });

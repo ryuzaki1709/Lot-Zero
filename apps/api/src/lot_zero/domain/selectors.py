@@ -65,7 +65,7 @@ def build_incident_projection(state: IncidentState, *, model_id: str | None = No
     # 2. Runtime metadata
     model_avail = {
         "kind": "available",
-        "value": model_id or "gemini-2.5-flash (Google GenAI)",
+        "value": model_id or "gemini-3.5-flash (Google GenAI)",
         "record_ids": ["MODEL-GEMINI-FLASH"],
         "prompt_digest": "sha256:7328b75c62df41d9342fbfa00012fd24bee4f189456b224702a60588f5a0e5cc",
     }

@@ -291,3 +291,42 @@ def test_phone_attestation_ack_resolution(client):
     assert res_close.status_code == 200
     assert res_close.json()["status"] == "closed"
     assert res_close.json()["blocked"] is False
+
+
+def test_sse_ephemeral_token_authentication_and_forgery_protection(client):
+    """Test HMAC-signed ephemeral SSE tokens: generation, expiry, and forgery protection."""
+    # 1. Unauthenticated request to /api/sse-token returns 401
+    res_unauth = client.post("/api/sse-token")
+    assert res_unauth.status_code == 401
+
+    # 2. Authenticated request issues valid token
+    res_token = client.post("/api/sse-token", headers={"X-API-Key": KEY_QA})
+    assert res_token.status_code == 200
+    token_data = res_token.json()
+    valid_token = token_data["token"]
+    assert token_data["principal"] == "QA-LEAD-01"
+    assert token_data["expires_in"] == 60
+
+    # 3. Forged token with tampered payload returns 401
+    parts = valid_token.split(".")
+    forged_token = f"eyJwcmluY2lwYWxfaWQiOiJBVFRPUk5FWS0wMSJ9.{parts[1]}"
+    res_forged = client.get(f"/api/incidents/EVAL-CASE-01/events?token={forged_token}")
+    assert res_forged.status_code == 401
+    assert "Invalid, forged, or expired token" in res_forged.json()["detail"]
+
+    # 4. Expired token returns 401
+    import base64
+    import hashlib
+    import hmac
+    import json
+    import time
+    from lot_zero.auth import SSE_SECRET
+
+    expired_payload = json.dumps({"principal_id": "QA-LEAD-01", "tenant_id": "EVAL-TENANT-01", "exp": int(time.time()) - 10}, separators=(",", ":"))
+    b64_exp = base64.urlsafe_b64encode(expired_payload.encode()).decode().rstrip("=")
+    exp_sig = hmac.new(SSE_SECRET.encode(), b64_exp.encode(), hashlib.sha256).hexdigest()
+    expired_token = f"{b64_exp}.{exp_sig}"
+
+    res_expired = client.get(f"/api/incidents/EVAL-CASE-01/events?token={expired_token}")
+    assert res_expired.status_code == 401
+    assert "Invalid, forged, or expired token" in res_expired.json()["detail"]

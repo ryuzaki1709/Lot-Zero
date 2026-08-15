@@ -94,3 +94,56 @@ def require_role(principal: Principal, role: Role) -> Principal:
             detail=f"Forbidden: Principal '{principal.principal_id}' lacks required role '{role}'.",
         )
     return principal
+
+
+# Server secret for short-lived HMAC SSE tokens
+SSE_SECRET = os.environ.get("LOT_ZERO_SSE_SECRET", "lot-zero-ephemeral-sse-token-secret-key-2026")
+
+
+def create_sse_token(principal: Principal, ttl_seconds: int = 60) -> str:
+    """Create short-lived HMAC-signed token for EventSource authentication."""
+    import base64
+    import hashlib
+    import hmac
+    import time
+
+    exp = int(time.time()) + ttl_seconds
+    payload_dict = {
+        "principal_id": principal.principal_id,
+        "tenant_id": principal.tenant_id,
+        "exp": exp,
+    }
+    payload_bytes = json.dumps(payload_dict, separators=(",", ":")).encode("utf-8")
+    b64_payload = base64.urlsafe_b64encode(payload_bytes).decode("utf-8").rstrip("=")
+    sig = hmac.new(SSE_SECRET.encode("utf-8"), b64_payload.encode("utf-8"), hashlib.sha256).hexdigest()
+    return f"{b64_payload}.{sig}"
+
+
+def verify_sse_token(token: str) -> Principal | None:
+    """Verify HMAC signature, expiration, and principal for given SSE token."""
+    import base64
+    import hashlib
+    import hmac
+    import time
+
+    try:
+        parts = token.strip().split(".")
+        if len(parts) != 2:
+            return None
+        b64_payload, sig = parts
+        padded = b64_payload + "=" * (-len(b64_payload) % 4)
+        expected_sig = hmac.new(SSE_SECRET.encode("utf-8"), b64_payload.encode("utf-8"), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(sig, expected_sig):
+            return None
+        data = json.loads(base64.urlsafe_b64decode(padded.encode("utf-8")).decode("utf-8"))
+        if time.time() > data.get("exp", 0):
+            return None
+        principal_id = data.get("principal_id")
+        tenant_id = data.get("tenant_id")
+        registry = _load_api_key_registry()
+        for p in registry.values():
+            if p.principal_id == principal_id and p.tenant_id == tenant_id:
+                return p
+        return Principal(tenant_id=tenant_id, principal_id=principal_id, roles=())
+    except Exception:
+        return None

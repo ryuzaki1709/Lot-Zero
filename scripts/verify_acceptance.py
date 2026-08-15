@@ -1,4 +1,4 @@
-"""Acceptance test script validating authority honesty and data integrity via standard library."""
+"""Acceptance test script validating authority honesty, HMAC SSE tokens, and data integrity."""
 
 import json
 import urllib.error
@@ -35,11 +35,14 @@ def test_acceptance_flow():
     status, data = http_req("POST", "/api/evaluation/reset", {"X-API-Key": KEY_COORD})
     assert status == 200, f"Reset failed: {data}"
 
-    print("2. Simulating signal as Recall Coordinator...")
+    print("2. Simulating signal as Recall Coordinator (Gemini 3.5+ extraction)...")
     status, data = http_req("POST", "/api/evaluation/simulate-signal", {"X-API-Key": KEY_COORD})
     assert status == 200, f"Signal failed: {data}"
     proj = data["projection"]
     assert proj["metrics"]["provisional_hold_quantity"] == 200.0
+    model_val = proj["runtime"]["model"]["value"]
+    print(f"   -> Runtime Model: {model_val}")
+    assert "gemini-3.5-flash" in model_val, f"Expected gemini-3.5-flash, got {model_val}"
 
     print("3. Testing Role Rejection: Recall Coordinator attempts to Approve Firm Quarantine...")
     status, data = http_req(
@@ -133,9 +136,21 @@ def test_acceptance_flow():
     assert data["regulatory_filing_id"] == "FDA-SAN-2026-NR-CUSTOM-005"
     assert data["projection"]["header"]["phase"] == "closed"
 
-    print("10. Testing SSE stream authentication...")
+    print("10. Testing HMAC-signed Ephemeral SSE Stream Authentication...")
     # Without token -> 401
     status, data = http_req("GET", "/api/incidents/EVAL-CASE-01/events")
+    assert status == 401
+
+    # Issue valid HMAC token via POST /api/sse-token
+    status, token_resp = http_req("POST", "/api/sse-token", {"X-API-Key": KEY_COORD})
+    assert status == 200, f"Failed to get SSE token: {token_resp}"
+    valid_token = token_resp["token"]
+    assert token_resp["expires_in"] == 60
+
+    # Forged token -> 401
+    parts = valid_token.split(".")
+    forged_token = f"eyJwcmluY2lwYWxfaWQiOiJBVFRPUk5FWS0wMSJ9.{parts[1]}"
+    status, data = http_req("GET", f"/api/incidents/EVAL-CASE-01/events?token={forged_token}")
     assert status == 401
 
     print("\nALL ACCEPTANCE CRITERIA PASSED!")

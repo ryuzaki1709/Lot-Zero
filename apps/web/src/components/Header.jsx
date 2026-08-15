@@ -38,7 +38,7 @@ export function Header({
   onApiKeyChange,
   onExportAudit,
 }) {
-  const modelName = projection?.runtime?.model?.value || 'gemini-2.5-flash';
+  const modelName = projection?.runtime?.model?.value || 'gemini-3.5-flash';
   const docHash = projection?.header?.source_doc_hash;
   const docVersion = projection?.header?.source_doc_version;
   const caseId = projection?.header?.case_id || 'EVAL-CASE-01';

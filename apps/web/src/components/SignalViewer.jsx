@@ -55,9 +55,11 @@ export function SignalViewer({ signal, scopes, modelName }) {
               </span>
             </div>
 
-            <div style={{ marginTop: '14px', fontSize: '12.5px', color: 'var(--text-muted)', wordBreak: 'break-all' }}>
-              SHA-256 <span className="mono-val">{signal.doc_hash || 'd8f3a9e14417b89…'}</span>
-            </div>
+            {signal.doc_hash && (
+              <div style={{ marginTop: '14px', fontSize: '12.5px', color: 'var(--text-muted)', wordBreak: 'break-all' }}>
+                SHA-256 <span className="mono-val">{signal.doc_hash}</span>
+              </div>
+            )}
           </div>
 
           {/* Grounded extraction */}

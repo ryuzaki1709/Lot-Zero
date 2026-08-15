@@ -68,6 +68,12 @@ export function ApprovalGate({
   const isStep1Done = !!qaReleaseApp;
   const isStep2Done = hasReleaseAction || !!closureReleaseApp;
 
+  // Derive outstanding acknowledgement ID dynamically without hardcoding
+  const outstandingAcks =
+    closureGate?.outstanding_acknowledgements || closureGate?.blocking_ack_ids || [];
+  const targetAckId = outstandingAcks.length > 0 ? outstandingAcks[0] : null;
+  const targetAckLabel = targetAckId || 'outstanding consignee acknowledgement';
+
   // Modal Escape key and focus trap management
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -238,7 +244,7 @@ export function ApprovalGate({
           </button>
         </div>
 
-        {/* Gate 3: Resolve ACK-006 via Phone */}
+        {/* Gate 3: Verify Consignee Attestation via Phone */}
         <div
           style={{
             background: 'var(--bg-surface-subtle)',
@@ -257,7 +263,7 @@ export function ApprovalGate({
               3. Verify Consignee Attestation
             </div>
             <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-              Role: <span style={{ color: 'var(--text-secondary)' }}>Customer Operations</span> — Signs phone attestation verifying distributor ACK-006.
+              Role: <span style={{ color: 'var(--text-secondary)' }}>Customer Operations</span> — Signs phone attestation verifying {targetAckLabel}.
             </div>
           </div>
 
@@ -265,10 +271,10 @@ export function ApprovalGate({
             className="btn btn-secondary"
             onClick={() => setIsPhoneModalOpen(true)}
             disabled={loading || !isOutboxDispatched || isAckResolved || isClosed}
-            title="Record signed phone attestation verifying distributor ACK-006 receipt"
+            title={`Record signed phone attestation verifying ${targetAckLabel} receipt`}
           >
             <PhoneCall size={13} />
-            {isAckResolved ? 'ACK-006 Resolved' : 'Verify Phone Attestation'}
+            {isAckResolved ? (targetAckId ? `${targetAckId} Resolved` : 'Attestation Resolved') : 'Verify Phone Attestation'}
           </button>
         </div>
 
@@ -464,7 +470,7 @@ export function ApprovalGate({
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <PhoneCall size={16} style={{ color: 'var(--accent-primary)' }} />
-                <h3 style={{ fontSize: '14px', fontWeight: 600 }}>Phone Attestation Record (ACK-006)</h3>
+                <h3 style={{ fontSize: '14px', fontWeight: 600 }}>Phone Attestation Record ({targetAckLabel})</h3>
               </div>
               <button className="btn btn-ghost" style={{ padding: '4px' }} onClick={() => setIsPhoneModalOpen(false)}>
                 <X size={16} />

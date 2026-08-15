@@ -46,14 +46,14 @@ def analyze_safety_signal(
             )
             # Make the Gemini call
             response = client.models.generate_content(
-                model="gemini-2.5-flash",
+                model="gemini-3.5-flash",
                 contents=prompt,
             )
-            model_tag = "gemini-2.5-flash (Google GenAI Live)"
+            model_tag = "gemini-3.5-flash (Google GenAI Live)"
         except Exception:
-            model_tag = "gemini-2.5-flash (Google GenAI Replay)"
+            model_tag = "gemini-3.5-flash (Google GenAI Replay)"
     else:
-        model_tag = "gemini-2.5-flash (Deterministic Grounded Replay)"
+        model_tag = "gemini-3.5-flash (Deterministic Grounded Replay)"
 
     # Mechanically derived spans with cryptographic hash and version binding
     spans = tuple(

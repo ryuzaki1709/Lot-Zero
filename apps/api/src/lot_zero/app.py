@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field, StringConstraints
 
 from .adapters.demo_sink import DemoNotificationSink
 from .adapters.sqlite_repository import SqliteIncidentRepository
-from .auth import get_current_principal, require_role
+from .auth import create_sse_token, get_current_principal, get_principal_for_key, require_role, verify_sse_token
 from .domain.authority import Principal
 from .domain.commands import (
     ApproveClosureCommand,
@@ -184,6 +184,18 @@ async def get_incident(
         return build_incident_projection(current_state)
 
 
+@app.post("/api/sse-token")
+async def issue_sse_token(principal: Principal = Depends(get_current_principal)):
+    """Issue short-lived (60s) HMAC-signed token for EventSource authentication."""
+    token = create_sse_token(principal, ttl_seconds=60)
+    return {
+        "token": token,
+        "principal": principal.principal_id,
+        "tenant": principal.tenant_id,
+        "expires_in": 60,
+    }
+
+
 @app.get("/api/incidents/{case_id}/events")
 async def sse_events(
     case_id: str,
@@ -194,20 +206,19 @@ async def sse_events(
     
     SECURITY AUDIT NOTE:
     Standard browser EventSource API does not support custom HTTP request headers (such as X-API-Key).
-    To avoid an unauthenticated read stream, authenticated clients supply their API key via the
-    '?token=' query parameter, which is authenticated against the server's principal registry.
+    To prevent unauthenticated stream reads, clients acquire a short-lived (60s) HMAC-signed token via
+    POST /api/sse-token and provide it via the '?token=' query parameter.
     """
-    key = token or x_api_key
-    if not key:
-        raise HTTPException(
-            status_code=401,
-            detail="Authentication required for SSE stream: Provide a valid token query parameter or X-API-Key header.",
-        )
-    principal = get_principal_for_key(key)
+    principal = None
+    if token:
+        principal = verify_sse_token(token)
+    elif x_api_key:
+        principal = get_principal_for_key(x_api_key)
+
     if not principal:
         raise HTTPException(
             status_code=401,
-            detail="Authentication failed for SSE stream: Invalid token or API key.",
+            detail="Authentication failed for SSE stream: Invalid, forged, or expired token.",
         )
 
     if case_id != current_state.case.case_id:
