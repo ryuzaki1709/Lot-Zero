@@ -1,0 +1,184 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 740" width="1200" height="740" style="background:#0b1120; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+  <defs>
+    <linearGradient id="gradClient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e293b" />
+      <stop offset="100%" stop-color="#0f172a" />
+    </linearGradient>
+    <linearGradient id="gradCompute" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e293b" />
+      <stop offset="100%" stop-color="#0f172a" />
+    </linearGradient>
+    <linearGradient id="gradBox" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#334155" />
+      <stop offset="100%" stop-color="#1e293b" />
+    </linearGradient>
+    <filter id="shadow" x="-5%" y="-5%" width="110%" height="110%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity="0.5"/>
+    </filter>
+    <marker id="arrowBlue" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#38bdf8" />
+    </marker>
+    <marker id="arrowGreen" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#00dc82" />
+    </marker>
+    <marker id="arrowPurple" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#c084fc" />
+    </marker>
+  </defs>
+
+  <!-- Background Base -->
+  <rect width="1200" height="740" fill="#0b1120"/>
+
+  <!-- Title Header -->
+  <text x="40" y="42" fill="#ffffff" font-size="22" font-weight="700" letter-spacing="-0.5">Lot Zero — System Architecture</text>
+  <text x="40" y="65" fill="#94a3b8" font-size="13">Deterministic Regulated Recall Workspace · Google Cloud Run · Cloud Storage (GCS FUSE) · Gemini 3.5 Flash</text>
+
+  <!-- ==================== 1. CLIENT LAYER ==================== -->
+  <rect x="40" y="85" width="310" height="615" rx="10" fill="url(#gradClient)" stroke="#334155" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="40" y="85" width="310" height="38" rx="10" fill="#1e293b" />
+  <rect x="40" y="113" width="310" height="10" fill="#1e293b" />
+  <text x="56" y="110" fill="#38bdf8" font-size="13" font-weight="700">CLIENT LAYER: Browser SPA (React + Vite)</text>
+
+  <!-- Client Box 1: Role Cockpit -->
+  <rect x="56" y="135" width="278" height="98" rx="6" fill="url(#gradBox)" stroke="#475569" stroke-width="1"/>
+  <text x="70" y="158" fill="#f1f5f9" font-size="13" font-weight="600">Role-Based Incident Cockpit</text>
+  <text x="70" y="178" fill="#cbd5e1" font-size="11.5">• Recall Coordinator (Simulate Signal, Propose Scope)</text>
+  <text x="70" y="196" fill="#cbd5e1" font-size="11.5">• QA Lead (Firm Quarantine Sign-Off)</text>
+  <text x="70" y="214" fill="#cbd5e1" font-size="11.5">• Customer Ops (Outbox Dispatch, Attestations)</text>
+
+  <!-- Client Box 2: Dual Signature Rail -->
+  <rect x="56" y="245" width="278" height="100" rx="6" fill="url(#gradBox)" stroke="#00dc82" stroke-width="1"/>
+  <text x="70" y="268" fill="#00dc82" font-size="13" font-weight="600">Dual-Signature Release Rail</text>
+  <text x="70" y="288" fill="#cbd5e1" font-size="11.5">Step 1: QA Lead Biological Clearance (Re-test Hash)</text>
+  <text x="70" y="306" fill="#cbd5e1" font-size="11.5">Step 2: Closure Authority Operational Release</text>
+  <text x="70" y="324" fill="#94a3b8" font-size="11">• 21 CFR § 7.49 Non-Response Escalation Modal</text>
+
+  <!-- Client Box 3: Real-Time Stream -->
+  <rect x="56" y="358" width="278" height="92" rx="6" fill="url(#gradBox)" stroke="#475569" stroke-width="1"/>
+  <text x="70" y="381" fill="#f1f5f9" font-size="13" font-weight="600">Real-Time Event Consumer</text>
+  <text x="70" y="401" fill="#cbd5e1" font-size="11.5">• Server-Sent Events (SSE) stream subscriber</text>
+  <text x="70" y="419" fill="#cbd5e1" font-size="11.5">• 60s Ephemeral HMAC Token Authentication</text>
+  <text x="70" y="437" fill="#94a3b8" font-size="11">• Automatic token refresh on reconnect</text>
+
+  <!-- Client Box 4: Audit Inspector -->
+  <rect x="56" y="462" width="278" height="92" rx="6" fill="url(#gradBox)" stroke="#475569" stroke-width="1"/>
+  <text x="70" y="485" fill="#f1f5f9" font-size="13" font-weight="600">Audit Ledger &amp; Export Inspector</text>
+  <text x="70" y="505" fill="#cbd5e1" font-size="11.5">• Live tamper-evident ledger visualizer</text>
+  <text x="70" y="523" fill="#cbd5e1" font-size="11.5">• Instant cryptographic audit bundle download</text>
+  <text x="70" y="541" fill="#94a3b8" font-size="11">• Client-side SHA-256 chain verification</text>
+
+  <!-- Client Box 5: Genealogy DAG -->
+  <rect x="56" y="566" width="278" height="118" rx="6" fill="url(#gradBox)" stroke="#475569" stroke-width="1"/>
+  <text x="70" y="589" fill="#f1f5f9" font-size="13" font-weight="600">Dynamic Genealogy DAG</text>
+  <text x="70" y="609" fill="#cbd5e1" font-size="11.5">• Contaminated lot ING-4417 isolation graph</text>
+  <text x="70" y="627" fill="#cbd5e1" font-size="11.5">• 200 Finished units (FP-A &amp; FP-B) quarantine</text>
+  <text x="70" y="645" fill="#cbd5e1" font-size="11.5">• 100 Negative control units (FP-C) unblocked</text>
+  <text x="70" y="663" fill="#94a3b8" font-size="11">• Zero hallucinated quantities (Deterministic)</text>
+
+  <!-- ==================== 2. COMPUTE LAYER (CLOUD RUN) ==================== -->
+  <rect x="390" y="85" width="460" height="615" rx="10" fill="url(#gradCompute)" stroke="#38bdf8" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="390" y="85" width="460" height="38" rx="10" fill="#1e293b" />
+  <rect x="390" y="113" width="460" height="10" fill="#1e293b" />
+  <text x="406" y="110" fill="#38bdf8" font-size="13" font-weight="700">COMPUTE: Google Cloud Run (FastAPI + Kernel + Reducer)</text>
+
+  <!-- FastAPI Gateway -->
+  <rect x="410" y="135" width="420" height="82" rx="6" fill="url(#gradBox)" stroke="#475569" stroke-width="1"/>
+  <text x="425" y="158" fill="#f1f5f9" font-size="13" font-weight="600">FastAPI Router &amp; SPA Static Server</text>
+  <text x="425" y="178" fill="#cbd5e1" font-size="11.5">• Endpoints: /api/evaluation/*, /api/projections/*, /api/cases/*</text>
+  <text x="425" y="196" fill="#cbd5e1" font-size="11.5">• Static SPA mount (/assets) + catch-all index.html fallback</text>
+
+  <!-- Authority Kernel -->
+  <rect x="410" y="230" width="420" height="92" rx="6" fill="url(#gradBox)" stroke="#00dc82" stroke-width="1"/>
+  <text x="425" y="253" fill="#00dc82" font-size="13" font-weight="600">Separation of Duties Authority Kernel</text>
+  <text x="425" y="273" fill="#cbd5e1" font-size="11.5">• Strict separation: Requester != Approver (403 on collision)</text>
+  <text x="425" y="291" fill="#cbd5e1" font-size="11.5">• Dual-signature gate: QA Lead step 1 -> Closure Authority step 2</text>
+  <text x="425" y="309" fill="#94a3b8" font-size="11">• 21 CFR § 7.49: >= 3 contact attempts + district office escalation</text>
+
+  <!-- Deterministic Reducer & Optimistic Concurrency -->
+  <rect x="410" y="335" width="420" height="92" rx="6" fill="url(#gradBox)" stroke="#475569" stroke-width="1"/>
+  <text x="425" y="358" fill="#f1f5f9" font-size="13" font-weight="600">Deterministic Reducer Engine</text>
+  <text x="425" y="378" fill="#cbd5e1" font-size="11.5">• Pure state transition functions over domain event stream</text>
+  <text x="425" y="396" fill="#cbd5e1" font-size="11.5">• Optimistic concurrency: expected_version verification</text>
+  <text x="425" y="414" fill="#94a3b8" font-size="11">• 100% deterministic arithmetic across units and consignees</text>
+
+  <!-- Read Projections Engine -->
+  <rect x="410" y="440" width="420" height="78" rx="6" fill="url(#gradBox)" stroke="#475569" stroke-width="1"/>
+  <text x="425" y="463" fill="#f1f5f9" font-size="13" font-weight="600">Read-Model Projections Engine</text>
+  <text x="425" y="483" fill="#cbd5e1" font-size="11.5">• Fast query projections: Open Holds, Pending QA, Blocked Acks</text>
+  <text x="425" y="501" fill="#94a3b8" font-size="11">• Indexed directly from events without full aggregate rehydration</text>
+
+  <!-- Hash Chained Exporter & SSE Hub -->
+  <rect x="410" y="530" width="202" height="154" rx="6" fill="url(#gradBox)" stroke="#c084fc" stroke-width="1"/>
+  <text x="422" y="553" fill="#c084fc" font-size="12.5" font-weight="600">Hash-Chained Exporter</text>
+  <text x="422" y="573" fill="#cbd5e1" font-size="11">• SHA-256 event chaining</text>
+  <text x="422" y="591" fill="#cbd5e1" font-size="11">• Top-level root digest</text>
+  <text x="422" y="609" fill="#cbd5e1" font-size="11">• Tamper detection: reorder,</text>
+  <text x="422" y="627" fill="#cbd5e1" font-size="11">  edit, omit, fake digest</text>
+  <text x="422" y="645" fill="#94a3b8" font-size="10.5">• Self-verifying JSON bundle</text>
+
+  <rect x="628" y="530" width="202" height="154" rx="6" fill="url(#gradBox)" stroke="#475569" stroke-width="1"/>
+  <text x="640" y="553" fill="#38bdf8" font-size="12.5" font-weight="600">Real-Time SSE Hub</text>
+  <text x="640" y="573" fill="#cbd5e1" font-size="11">• POST /api/sse-token</text>
+  <text x="640" y="591" fill="#cbd5e1" font-size="11">• 60s Ephemeral HMAC tokens</text>
+  <text x="640" y="609" fill="#cbd5e1" font-size="11">• Forgery &amp; expiry denial</text>
+  <text x="640" y="627" fill="#cbd5e1" font-size="11">• Live state delta broadcast</text>
+  <text x="640" y="645" fill="#94a3b8" font-size="10.5">• Non-blocking async queue</text>
+
+  <!-- ==================== 3. EXTERNAL & CLOUD SERVICES ==================== -->
+  
+  <!-- AI Layer: Gemini 3.5 Flash -->
+  <rect x="890" y="85" width="270" height="150" rx="8" fill="url(#gradCompute)" stroke="#38bdf8" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="890" y="85" width="270" height="32" rx="8" fill="#1e293b" />
+  <rect x="890" y="107" width="270" height="10" fill="#1e293b" />
+  <text x="905" y="107" fill="#38bdf8" font-size="12" font-weight="700">AI: Gemini 3.5 Flash (Google GenAI)</text>
+  <text x="905" y="138" fill="#f1f5f9" font-size="12" font-weight="600">Multimodal Signal Extraction</text>
+  <text x="905" y="158" fill="#cbd5e1" font-size="11.5">• Ingests lab Salmonella notices</text>
+  <text x="905" y="176" fill="#cbd5e1" font-size="11.5">• Extracts lot ING-4417 &amp; pathogen</text>
+  <text x="905" y="194" fill="#cbd5e1" font-size="11.5">• Character-offset citation spans</text>
+  <text x="905" y="212" fill="#94a3b8" font-size="11">• Bound to source report SHA-256</text>
+
+  <!-- Storage: Cloud Storage GCS FUSE -->
+  <rect x="890" y="250" width="270" height="155" rx="8" fill="url(#gradCompute)" stroke="#00dc82" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="890" y="250" width="270" height="32" rx="8" fill="#1e293b" />
+  <rect x="890" y="272" width="270" height="10" fill="#1e293b" />
+  <text x="905" y="272" fill="#00dc82" font-size="12" font-weight="700">STORAGE: Cloud Storage (GCS FUSE)</text>
+  <text x="905" y="303" fill="#f1f5f9" font-size="12" font-weight="600">Persistent SQLite Event Store</text>
+  <text x="905" y="323" fill="#cbd5e1" font-size="11.5">• Mount: /app/data/lot_zero.db</text>
+  <text x="905" y="341" fill="#cbd5e1" font-size="11.5">• Table: incident_events</text>
+  <text x="905" y="359" fill="#cbd5e1" font-size="11.5">• UNIQUE(tenant_id, case_id, version)</text>
+  <text x="905" y="377" fill="#94a3b8" font-size="11">• Single-writer safe (--max-instances=1)</text>
+
+  <!-- Security: Secret Manager -->
+  <rect x="890" y="420" width="270" height="120" rx="8" fill="url(#gradCompute)" stroke="#475569" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="890" y="420" width="270" height="32" rx="8" fill="#1e293b" />
+  <rect x="890" y="442" width="270" height="10" fill="#1e293b" />
+  <text x="905" y="442" fill="#cbd5e1" font-size="12" font-weight="700">SECURITY: Cloud Secret Manager</text>
+  <text x="905" y="473" fill="#f1f5f9" font-size="12" font-weight="600">Runtime Secret Injection</text>
+  <text x="905" y="493" fill="#cbd5e1" font-size="11.5">• GEMINI_API_KEY:latest</text>
+  <text x="905" y="511" fill="#cbd5e1" font-size="11.5">• LOT_ZERO_SSE_SECRET:latest</text>
+  <text x="905" y="527" fill="#94a3b8" font-size="10.5">• Injected as container env vars</text>
+
+  <!-- Auditor Bundle -->
+  <rect x="890" y="555" width="270" height="145" rx="8" fill="url(#gradCompute)" stroke="#c084fc" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="890" y="555" width="270" height="32" rx="8" fill="#1e293b" />
+  <rect x="890" y="577" width="270" height="10" fill="#1e293b" />
+  <text x="905" y="577" fill="#c084fc" font-size="12" font-weight="700">AUDITOR: Regulatory Evidence Export</text>
+  <text x="905" y="608" fill="#f1f5f9" font-size="12" font-weight="600">Tamper-Evident Evidence Stream</text>
+  <text x="905" y="628" fill="#cbd5e1" font-size="11.5">• 21 CFR § 7.49 Certified Non-Response</text>
+  <text x="905" y="646" fill="#cbd5e1" font-size="11.5">• SHA-256 Hash Chained Bundle</text>
+  <text x="905" y="664" fill="#cbd5e1" font-size="11.5">• Deterministic Top-Level Digest</text>
+  <text x="905" y="682" fill="#94a3b8" font-size="10.5">• Offline &amp; third-party verifiable</text>
+
+  <!-- ==================== CONNECTORS ==================== -->
+  <!-- Client to Gateway -->
+  <line x1="350" y1="175" x2="410" y2="175" stroke="#38bdf8" stroke-width="2" marker-end="url(#arrowBlue)" />
+
+  <!-- Gateway to AI -->
+  <line x1="830" y1="165" x2="890" y2="165" stroke="#38bdf8" stroke-width="2" marker-end="url(#arrowBlue)" />
+  
+  <!-- Reducer to Storage -->
+  <line x1="830" y1="380" x2="890" y2="330" stroke="#00dc82" stroke-width="2" marker-end="url(#arrowGreen)" />
+
+  <!-- Exporter to Auditor -->
+  <line x1="612" y1="630" x2="890" y2="630" stroke="#c084fc" stroke-width="2" marker-end="url(#arrowPurple)" />
+</svg>

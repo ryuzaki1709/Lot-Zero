@@ -9,15 +9,7 @@
 
 **Lot Zero** converts incoming safety signals (e.g., laboratory Salmonella contamination reports) into an auditable, tamper-evident incident management process:
 
-```mermaid
-graph TD
-    A[Raw Lab Signal: Salmonella Notice] --> B[Gemini Agent: Extraction & Citations]
-    B --> C[Lot Zero Deterministic Kernel: 118 Tests]
-    C --> D[SQLite Event Store: Append-Only + Optimistic Concurrency]
-    D --> E[Read-Model Projections: Holds, QA Gates, Refusals]
-    E --> F[Dual-Signature Release Rail: QA Biological + Closure Authority]
-    F --> G[Tamper-Evident SHA-256 Chained Audit Export: 21 CFR § 7.49 Compliant]
-```
+![Lot Zero System Architecture](docs/architecture.png)
 
 ### Core Architectural Pillars
 
@@ -121,7 +113,7 @@ gcloud run deploy lot-zero \
     --platform=managed \
     --allow-unauthenticated \
     --min-instances=0 \
-    --max-instances=2 \
+    --max-instances=1 \
     --memory=512Mi \
     --set-env-vars="LOT_ZERO_DB_PATH=/app/data/lot_zero.db,LOT_ZERO_TENANT_ID=EVAL-TENANT-01" \
     --set-secrets="GEMINI_API_KEY=gemini-api-key:latest,LOT_ZERO_SSE_SECRET=lot-zero-sse-secret:latest" \
@@ -131,7 +123,7 @@ gcloud run deploy lot-zero \
 
 Verify the live deployment with the smoke-test script:
 ```bash
-python scripts/verify_cloud_deploy.py https://lot-zero-76812879581-uc.a.run.app
+python scripts/verify_cloud_deploy.py <DEPLOYED_SERVICE_URL>
 ```
 
 ---

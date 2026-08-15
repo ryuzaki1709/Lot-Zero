@@ -1,0 +1,53 @@
+flowchart TB
+    subgraph CLIENT["Client Layer: Browser SPA (React + Vite)"]
+        UI_COCKPIT["Role-Based Cockpit<br/>(Recall Coord, QA Lead, Ops, Closure Auth)"]
+        UI_RAIL["Dual-Signature Release Rail<br/>(Sequential Biological & Inventory Gate)"]
+        UI_SSE["Real-Time Stream Consumer<br/>(Ephemeral HMAC-Signed Token)"]
+        UI_AUDIT["Audit Export & Ledger Inspector"]
+    end
+
+    subgraph SECRETS["Google Cloud Secret Manager"]
+        SEC_GEMINI["GEMINI_API_KEY"]
+        SEC_SSE["LOT_ZERO_SSE_SECRET"]
+    end
+
+    subgraph GENAI["Google AI Services"]
+        GEMINI["Gemini 3.5 Flash<br/>(Google GenAI SDK)<br/>• Multimodal Signal Extraction<br/>• Character-Offset Citation Spans"]
+    end
+
+    subgraph CLOUD_RUN["Google Cloud Run (Unified Multi-Stage Container)"]
+        API_ROUTER["FastAPI Router & SPA Static Asset Server<br/>(/api/* routes + /assets + index.html fallback)"]
+        AUTH_KERNEL["Separation of Duties Authority Kernel<br/>(Role Enforcement, Dual-Signature Checks)"]
+        REDUCER["Deterministic Reducer Engine<br/>(Optimistic Concurrency Control)"]
+        PROJECTIONS["Read-Model Projections Engine<br/>(Open Holds, Pending QA, Blocked Acks)"]
+        AUDIT_EXPORTER["Hash-Chained Audit Exporter<br/>(SHA-256 Entry Chain + Root Digest)"]
+        SSE_HUB["Server-Sent Events Broadcast Hub<br/>(60s Ephemeral HMAC Token Auth)"]
+    end
+
+    subgraph STORAGE["Google Cloud Storage (GCS FUSE Volume Mount)"]
+        SQLITE_DB["Persistent SQLite Event Store (/app/data/lot_zero.db)<br/>• incident_events (Append-Only Log)<br/>• optimistic concurrency via expected_version"]
+    end
+
+    subgraph AUDITOR["Regulatory Compliance & External Auditor"]
+        BUNDLE["Tamper-Evident Audit Export Bundle<br/>(21 CFR § 7.49 Non-Response & Hash Chain)"]
+    end
+
+    %% Interactions
+    UI_COCKPIT -->|HTTP POST Mutations / API Key| API_ROUTER
+    UI_RAIL -->|Dual-Signature Approvals| API_ROUTER
+    UI_SSE <-->|Live Event Stream / HMAC Token| SSE_HUB
+    UI_AUDIT -->|GET /api/cases/{id}/audit-export| API_ROUTER
+
+    SECRETS -.->|Injected Environment Variables| CLOUD_RUN
+
+    API_ROUTER --> AUTH_KERNEL
+    AUTH_KERNEL -->|Simulate Signal| GEMINI
+    GEMINI -.->|Extracted Spans & Ingredient Lot| AUTH_KERNEL
+    AUTH_KERNEL --> REDUCER
+    REDUCER --> SQLITE_DB
+    SQLITE_DB --> PROJECTIONS
+    PROJECTIONS --> API_ROUTER
+    REDUCER -->|Broadcast State Delta| SSE_HUB
+    SQLITE_DB --> AUDIT_EXPORTER
+    AUDIT_EXPORTER -->|Cryptographic Bundle| BUNDLE
+    BUNDLE --> AUDITOR
