@@ -315,7 +315,7 @@ export function App() {
   const isQaApproved = approvals?.some((a) => a.decision === 'approved' && a.approval_type === 'containment');
 
   return (
-    <div style={{ position: 'relative', minHeight: '100vh', paddingBottom: '40px' }}>
+    <div style={{ minHeight: '100vh', paddingBottom: '32px', maxWidth: '1600px', margin: '0 auto' }}>
       <KineticBackground />
 
       <Header
@@ -330,38 +330,34 @@ export function App() {
         sseConnected={sseConnected}
       />
 
-      <div style={{ margin: '0 20px 16px' }}>
-        <CaseDashboard
-          currentCaseId={currentCaseId}
-          onSelectCase={(id) => setCurrentCaseId(id)}
-          activePhase={phase}
-          approvals={approvals}
-          containmentActions={projection?.containment_actions}
-          apiKey={activeApiKey}
-        />
-      </div>
+      <CaseDashboard
+        currentCaseId={currentCaseId}
+        onSelectCase={(id) => setCurrentCaseId(id)}
+        activePhase={phase}
+        approvals={approvals}
+        containmentActions={projection?.containment_actions}
+        apiKey={activeApiKey}
+      />
 
       <StageProgress phase={phase} metrics={metrics} closureGate={closureGate} />
 
       {/* Main Operational 3-Column Cockpit */}
       <main
         style={{
-          position: 'relative',
-          zIndex: 10,
-          margin: '0 20px',
+          margin: '0 24px',
           display: 'grid',
-          gridTemplateColumns: 'minmax(280px, 1fr) minmax(380px, 1.4fr) minmax(280px, 1fr)',
-          gap: '18px',
+          gridTemplateColumns: 'minmax(280px, 1fr) minmax(360px, 1.4fr) minmax(280px, 1fr)',
+          gap: '16px',
           alignItems: 'start',
         }}
       >
         {/* Column 1: Signal Ingestion & Citations */}
-        <section style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+        <section style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <SignalViewer signal={signal} scopes={projection?.scopes} modelName={modelName} />
         </section>
 
         {/* Column 2: Bidirectional DAG & Dual Human Decision Gate */}
-        <section style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+        <section style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <GenealogyGraph
             genealogy={genealogy}
             metrics={metrics}
@@ -383,7 +379,7 @@ export function App() {
         </section>
 
         {/* Column 3: Evidence Ledger, Signed Audit Signatures & Consignee Acks */}
-        <section style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+        <section style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <EvidenceLedger
             acknowledgements={acks}
             closureGate={closureGate}

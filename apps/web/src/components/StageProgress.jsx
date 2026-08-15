@@ -17,48 +17,54 @@ export function StageProgress({ phase, metrics, closureGate }) {
   const stages = [
     {
       id: 'signal_received',
-      name: '01. Ingestion',
-      desc: 'Lab Salmonella Notice',
+      num: '01',
+      name: 'Signal Ingestion',
+      desc: 'Pathogen lab notice',
       icon: FileSearch,
       isDone: phase !== 'signal_received',
       isActive: phase === 'signal_received',
     },
     {
       id: 'scope_review',
-      name: '02. Trace & Scope',
-      desc: 'Bidirectional DAG',
+      num: '02',
+      name: 'Trace & Scope',
+      desc: 'Genealogy graph traversal',
       icon: Network,
       isDone: ['provisional_containment', 'action_review', 'ack_monitoring', 'effectiveness_check', 'closed'].includes(phase),
       isActive: phase === 'scope_review',
     },
     {
       id: 'provisional_containment',
-      name: '03. Provisional Hold',
-      desc: '30m Soft Hold (EVAL-HOLD-01)',
+      num: '03',
+      name: 'Provisional Hold',
+      desc: '30m soft hold (EVAL-HOLD-01)',
       icon: Lock,
       isDone: ['action_review', 'ack_monitoring', 'effectiveness_check', 'closed'].includes(phase),
       isActive: phase === 'provisional_containment',
     },
     {
       id: 'action_review',
-      name: '04. QA & Coord Approval',
-      desc: 'Dual Role Gate Signed',
+      num: '04',
+      name: 'QA & Coord Approval',
+      desc: 'Dual-role gate signed',
       icon: UserCheck,
       isDone: ['ack_monitoring', 'effectiveness_check', 'closed'].includes(phase),
       isActive: phase === 'action_review',
     },
     {
       id: 'ack_monitoring',
-      name: '05. Consignee Outreach',
-      desc: 'Outbox & Acknowledgements',
+      num: '05',
+      name: 'Consignee Outreach',
+      desc: 'Outbox & acknowledgements',
       icon: Send,
       isDone: ['effectiveness_check', 'closed'].includes(phase),
       isActive: phase === 'ack_monitoring',
     },
     {
       id: 'effectiveness_check',
-      name: '06. Disposition',
-      desc: isClosed ? 'Closed & Archived' : (isBlocked ? 'Blocked (ACK-006 Pending)' : 'Ready to Close'),
+      num: '06',
+      name: 'Incident Disposition',
+      desc: isClosed ? 'Closed & archived' : (isBlocked ? 'Blocked (ACK-006 pending)' : 'Ready to close'),
       icon: isClosed ? ShieldCheck : (isBlocked ? AlertOctagon : CheckCircle2),
       isDone: isClosed,
       isActive: phase === 'effectiveness_check' || isClosed,
@@ -69,44 +75,50 @@ export function StageProgress({ phase, metrics, closureGate }) {
 
   return (
     <div
-      className="glass-panel"
+      className="card-panel"
       style={{
-        margin: '0 20px 20px',
-        padding: '14px 18px',
+        margin: '0 24px 16px',
+        padding: '12px 16px',
         overflowX: 'auto',
       }}
     >
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(6, minmax(150px, 1fr))',
-          gap: '10px',
-          minWidth: '940px',
+          gridTemplateColumns: 'repeat(6, minmax(140px, 1fr))',
+          gap: '8px',
+          minWidth: '880px',
         }}
       >
         {stages.map((stage) => {
           const Icon = stage.icon;
-          let statusColor = 'var(--text-muted)';
-          let bgStyle = 'rgba(255, 255, 255, 0.02)';
-          let borderStyle = 'var(--border-subtle)';
+          let borderColor = 'var(--border-subtle)';
+          let bgColor = 'transparent';
+          let statusDot = 'status-dot-neutral';
+          let labelColor = 'var(--text-muted)';
+          let titleColor = 'var(--text-secondary)';
 
           if (stage.isDone) {
-            statusColor = 'var(--accent-emerald)';
-            bgStyle = 'rgba(16, 185, 129, 0.08)';
-            borderStyle = 'rgba(16, 185, 129, 0.3)';
+            borderColor = 'rgba(34, 197, 94, 0.25)';
+            bgColor = 'rgba(34, 197, 94, 0.03)';
+            statusDot = 'status-dot-success';
+            titleColor = 'var(--text-primary)';
           } else if (stage.isActive) {
             if (stage.isWarning) {
-              statusColor = 'var(--accent-amber)';
-              bgStyle = 'rgba(245, 158, 11, 0.12)';
-              borderStyle = 'rgba(245, 158, 11, 0.4)';
+              borderColor = 'rgba(245, 158, 11, 0.4)';
+              bgColor = 'rgba(245, 158, 11, 0.05)';
+              statusDot = 'status-dot-warning';
+              titleColor = 'var(--status-warning-text)';
             } else if (stage.isSuccess) {
-              statusColor = 'var(--accent-emerald)';
-              bgStyle = 'rgba(16, 185, 129, 0.15)';
-              borderStyle = 'var(--accent-emerald)';
+              borderColor = 'rgba(34, 197, 94, 0.4)';
+              bgColor = 'rgba(34, 197, 94, 0.05)';
+              statusDot = 'status-dot-success';
+              titleColor = 'var(--status-success-text)';
             } else {
-              statusColor = 'var(--accent-cyan)';
-              bgStyle = 'rgba(6, 182, 212, 0.12)';
-              borderStyle = 'var(--border-active)';
+              borderColor = 'var(--accent-primary)';
+              bgColor = 'rgba(6, 182, 212, 0.04)';
+              statusDot = 'status-dot-success';
+              titleColor = 'var(--text-primary)';
             }
           }
 
@@ -114,54 +126,30 @@ export function StageProgress({ phase, metrics, closureGate }) {
             <div
               key={stage.id}
               style={{
-                background: bgStyle,
-                border: `1px solid ${borderStyle}`,
-                borderRadius: '10px',
+                background: bgColor,
+                border: `1px solid ${borderColor}`,
+                borderRadius: 'var(--radius-md)',
                 padding: '10px 12px',
                 display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                position: 'relative',
+                flexDirection: 'column',
+                gap: '4px',
+                transition: 'border-color var(--transition-fast), background-color var(--transition-fast)',
               }}
             >
-              <div
-                style={{
-                  width: '30px',
-                  height: '30px',
-                  borderRadius: '8px',
-                  background: 'rgba(0, 0, 0, 0.35)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexShrink: 0,
-                }}
-              >
-                <Icon size={16} color={statusColor} />
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span className="section-label" style={{ fontSize: '10px' }}>
+                  {stage.num}
+                </span>
+                <span className={`status-dot ${statusDot}`} />
               </div>
-              <div style={{ minWidth: 0 }}>
-                <div
-                  style={{
-                    fontSize: '0.78rem',
-                    fontWeight: 700,
-                    color: stage.isActive ? 'var(--text-primary)' : statusColor,
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                  }}
-                >
-                  {stage.name}
-                </div>
-                <div
-                  style={{
-                    fontSize: '0.7rem',
-                    color: 'var(--text-secondary)',
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                  }}
-                >
-                  {stage.desc}
-                </div>
+
+              <div style={{ fontSize: '13px', fontWeight: 600, color: titleColor, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Icon size={14} style={{ flexShrink: 0, opacity: stage.isActive ? 1 : 0.7 }} />
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{stage.name}</span>
+              </div>
+
+              <div style={{ fontSize: '11px', color: labelColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {stage.desc}
               </div>
             </div>
           );

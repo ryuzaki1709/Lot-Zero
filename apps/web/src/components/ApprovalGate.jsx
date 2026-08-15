@@ -1,18 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import {
   UserCheck,
-  ShieldAlert,
   Send,
   Lock,
   CheckCircle2,
-  AlertTriangle,
   Clock,
   PhoneCall,
-  RotateCcw,
   ShieldCheck,
   FileCheck,
-  PlusCircle,
-  FileText,
+  X,
 } from 'lucide-react';
 
 export function ApprovalGate({
@@ -53,7 +49,14 @@ export function ApprovalGate({
   const [coordSignature, setCoordSignature] = useState('Marcus Vance (RECALL-COORD-01)');
   const [coordRationale, setCoordRationale] = useState('Confirmed re-test documentation attached and validated with lab director. Authorizing inventory release.');
 
-  const isQaApproved = approvals?.some(a => a.decision === 'approved' && a.approval_type === 'containment');
+  // Non-Response 21 CFR § 7.49 Form State
+  const [regFilingId, setRegFilingId] = useState('FDA-NONRESP-2026-0814-06');
+  const [attemptCount, setAttemptCount] = useState(3);
+  const [goodFaithNotes, setGoodFaithNotes] = useState(
+    '3 documented phone/certified mail outreach attempts without response. Escalated to FDA District Office pursuant to 21 CFR § 7.49.'
+  );
+
+  const isQaApproved = approvals?.some((a) => a.decision === 'approved' && a.approval_type === 'containment');
   const isOutboxDispatched = ['ack_monitoring', 'effectiveness_check', 'closed'].includes(phase);
   const isAckResolved = !closureGate?.is_blocked && isOutboxDispatched;
   const isClosed = phase === 'closed';
@@ -105,27 +108,43 @@ export function ApprovalGate({
     setIsReleaseModalOpen(false);
   };
 
+  const handleNonResponseSubmit = (e) => {
+    e.preventDefault();
+    onCloseWithNonResponse({
+      regulatory_filing_id: regFilingId,
+      attempt_count: attemptCount,
+      good_faith_notes: goodFaithNotes,
+    });
+    setIsNonResponseModalOpen(false);
+  };
+
   return (
-    <div className="glass-panel" style={{ padding: '18px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+    <div className="card-panel" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <UserCheck size={18} color="var(--accent-cyan)" />
-          <h2 style={{ fontSize: '1.05rem', fontWeight: 700 }}>Human Decision Gates (Separation of Duties)</h2>
+        <div>
+          <div className="section-label" style={{ marginBottom: '2px' }}>Governance & Authorization</div>
+          <h2 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <UserCheck size={15} style={{ color: 'var(--accent-primary)' }} />
+            Human decision gates (Separation of Duties)
+          </h2>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+
+        <div>
           {isQaApproved ? (
-            <span className="badge badge-emerald">
-              <ShieldCheck size={12} /> AUTH-HOLD-01 (Firm Quarantine)
+            <span className="status-tag status-tag-success">
+              <span className="status-dot status-dot-success" />
+              AUTH-HOLD-01 (Firm Quarantine)
             </span>
           ) : (
             <span
-              className="badge badge-amber"
-              title="Provisional soft hold active. Auto-escalates at 00:00."
+              className="status-tag status-tag-warning"
+              title="Provisional soft hold active. Click to extend +15m."
               style={{ cursor: 'pointer' }}
               onClick={onExtendTtl}
             >
-              <Clock size={12} /> TTL: {formatTimer(secondsRemaining)} (+15m)
+              <Clock size={12} />
+              <span className="mono-val">TTL: {formatTimer(secondsRemaining)} (+15m)</span>
             </span>
           )}
         </div>
@@ -133,16 +152,8 @@ export function ApprovalGate({
 
       {/* Rationale Input */}
       <div>
-        <label
-          style={{
-            display: 'block',
-            fontSize: '0.72rem',
-            color: 'var(--text-secondary)',
-            marginBottom: '4px',
-            fontWeight: 600,
-          }}
-        >
-          MANDATORY APPROVAL RATIONALE (IMMUTABLY LOGGED TO LEDGER):
+        <label className="section-label" style={{ display: 'block', marginBottom: '4px' }}>
+          Approval Rationale (Immutably appended to audit stream)
         </label>
         <textarea
           value={rationale}
@@ -151,170 +162,88 @@ export function ApprovalGate({
           disabled={isClosed}
           style={{
             width: '100%',
-            background: 'rgba(0, 0, 0, 0.4)',
-            border: '1px solid var(--border-subtle)',
-            borderRadius: '8px',
-            padding: '8px 10px',
-            color: 'var(--text-primary)',
-            fontSize: '0.78rem',
-            fontFamily: 'var(--font-sans)',
-            resize: 'none',
+            resize: 'vertical',
+            fontSize: '12px',
+            lineHeight: '1.4',
           }}
+          placeholder="Enter operational rationale..."
         />
       </div>
 
-      {/* Dual Role Approval Gates */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-        {/* Gate 1: QA Lead */}
-        <div
-          style={{
-            background: 'rgba(0, 0, 0, 0.3)',
-            border: isQaApproved ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid var(--border-subtle)',
-            borderRadius: '8px',
-            padding: '10px',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
-            gap: '8px',
-          }}
-        >
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: '0.72rem', color: 'var(--accent-cyan)', fontWeight: 700 }}>
-                ROLE 1: QA LEAD
-              </span>
-              {isQaApproved && <CheckCircle2 size={14} color="var(--accent-emerald)" />}
-            </div>
-            <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#f8fafc' }}>
-              Dr. Elena Rostova (QA-LEAD-01)
-            </div>
-            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-              Validates biology & locks firm quarantine policy.
-            </div>
-          </div>
-
-          <button
-            className={`btn-kinetic ${isQaApproved ? 'btn-emerald' : 'btn-primary'}`}
-            onClick={() => onApproveContainment(rationale)}
-            disabled={loading || isQaApproved || isClosed}
-            style={{ width: '100%', padding: '8px 12px', fontSize: '0.78rem' }}
-          >
-            {isQaApproved ? (
-              <>
-                <CheckCircle2 size={14} /> Signed: Firm Quarantine
-              </>
-            ) : (
-              <>
-                <ShieldAlert size={14} /> Sign Biological Containment
-              </>
-            )}
-          </button>
-        </div>
-
-        {/* Gate 2: Recall Coordinator */}
-        <div
-          style={{
-            background: 'rgba(0, 0, 0, 0.3)',
-            border: isOutboxDispatched ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid var(--border-subtle)',
-            borderRadius: '8px',
-            padding: '10px',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
-            gap: '8px',
-          }}
-        >
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: '0.72rem', color: 'var(--accent-cyan)', fontWeight: 700 }}>
-                ROLE 2: RECALL COORDINATOR
-              </span>
-              {isOutboxDispatched && <CheckCircle2 size={14} color="var(--accent-emerald)" />}
-            </div>
-            <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#f8fafc' }}>
-              Marcus Vance (RECALL-COORD-01)
-            </div>
-            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-              Authorizes consignee packet & monitors distributor outreach.
-            </div>
-          </div>
-
-          <button
-            className={`btn-kinetic ${isOutboxDispatched ? 'btn-emerald' : 'btn-primary'}`}
-            onClick={onDispatchOutbox}
-            disabled={loading || !isQaApproved || isOutboxDispatched || isClosed}
-            style={{ width: '100%', padding: '8px 12px', fontSize: '0.78rem' }}
-          >
-            {isOutboxDispatched ? (
-              <>
-                <CheckCircle2 size={14} /> Outbox Dispatched (6/6)
-              </>
-            ) : (
-              <>
-                <Send size={14} /> Authorize & Send Outbox
-              </>
-            )}
-          </button>
-        </div>
-      </div>
-
-      {/* Operational Actions Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px', marginTop: '2px' }}>
-        {/* Action 1: Signed Phone Attestation Modal Trigger */}
+      {/* Decision Actions Grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '8px' }}>
+        {/* Gate 1: QA Containment Approval */}
         <button
-          className={`btn-kinetic ${isAckResolved ? 'btn-emerald' : 'btn-secondary'}`}
-          onClick={() => setIsPhoneModalOpen(true)}
-          disabled={loading || !isOutboxDispatched || isAckResolved || isClosed}
-          style={{ padding: '7px 8px', fontSize: '0.72rem' }}
-          title="Attach signed call attestation with caller ID, contact person, and notes"
-        >
-          <PhoneCall size={13} />
-          {isAckResolved ? 'ACK-006 Signed' : 'Sign Phone Attest'}
-        </button>
-
-        {/* Action 2: Audit & Close Case */}
-        <button
-          className={`btn-kinetic ${isClosed ? 'btn-emerald' : 'btn-secondary'}`}
-          onClick={onRequestClosure}
-          disabled={loading || !isOutboxDispatched || isClosed}
-          style={{
-            padding: '7px 8px',
-            fontSize: '0.72rem',
-            borderColor: isClosed ? 'var(--accent-emerald)' : 'var(--border-danger)',
-            color: isClosed ? 'var(--accent-emerald)' : 'var(--accent-amber)',
-          }}
-          title="Attempt formal incident closure"
+          className={`btn ${!isQaApproved && !isClosed ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => onApproveContainment(rationale)}
+          disabled={loading || isQaApproved || isClosed}
+          title="QA Lead sign-off: converts provisional 30m soft hold into authorized firm quarantine"
         >
           <Lock size={13} />
-          {isClosed ? 'Case Closed' : 'Audit & Close'}
+          {isQaApproved ? 'Containment Approved' : 'Approve Firm Quarantine (QA)'}
         </button>
 
-        {/* Action 3: Documented Non-Response Closure (21 CFR § 7.49) */}
+        {/* Gate 2: Dispatch Outbox */}
         <button
-          className="btn-kinetic btn-secondary"
-          onClick={() => setIsNonResponseModalOpen(true)}
-          disabled={loading || !isOutboxDispatched || isClosed || isAckResolved}
-          style={{ padding: '7px 8px', fontSize: '0.72rem', color: 'var(--accent-amber)' }}
-          title="Close with certified 3-attempt non-response and FDA District Office referral"
+          className="btn btn-secondary"
+          onClick={onDispatchOutbox}
+          disabled={loading || !isQaApproved || isOutboxDispatched || isClosed}
+          title="Customer Operations sign-off: dispatch formal recall notices to all 6 consignees"
+        >
+          <Send size={13} />
+          {isOutboxDispatched ? 'Outbox Dispatched' : 'Dispatch Recall Outbox (Ops)'}
+        </button>
+
+        {/* Gate 3: Resolve ACK-006 via Phone */}
+        <button
+          className="btn btn-secondary"
+          onClick={() => setIsPhoneModalOpen(true)}
+          disabled={loading || !isOutboxDispatched || isAckResolved || isClosed}
+          title="Record signed phone attestation verifying distributor ACK-006 receipt"
+        >
+          <PhoneCall size={13} />
+          {isAckResolved ? 'ACK-006 Resolved' : 'Verify Phone Attestation'}
+        </button>
+
+        {/* Gate 4: Dual-Signature Release Rail */}
+        <button
+          className="btn btn-secondary"
+          onClick={() => setIsReleaseModalOpen(true)}
+          disabled={loading || !isQaApproved || isClosed}
+          title="Execute dual-signature inventory release with negative re-test biological proof"
         >
           <FileCheck size={13} />
-          Non-Response Close
+          Dual-Signature Release Rail
         </button>
 
-        {/* Action 4: Symmetrical Dual-Signature Release Modal Trigger */}
+        {/* Gate 5: Non-Response Closure (21 CFR § 7.49) */}
         <button
-          className="btn-kinetic btn-secondary"
-          onClick={() => setIsReleaseModalOpen(true)}
-          disabled={loading || isClosed}
-          style={{ padding: '7px 8px', fontSize: '0.72rem', color: 'var(--text-secondary)' }}
-          title="Authorize inventory un-hold requiring lab re-test hash and dual QA + Coordinator signatures"
+          className="btn btn-secondary"
+          onClick={() => setIsNonResponseModalOpen(true)}
+          disabled={loading || !isOutboxDispatched || isClosed}
+          title="Document certified non-response under 21 CFR § 7.49 and refer to FDA District Office"
         >
-          <RotateCcw size={13} />
-          Dual Release
+          <ShieldCheck size={13} />
+          Non-Response Close (§ 7.49)
+        </button>
+
+        {/* Gate 6: Request Closure */}
+        <button
+          className={`btn ${isClosed ? 'btn-secondary' : 'btn-ghost'}`}
+          onClick={onRequestClosure}
+          disabled={loading || isClosed}
+          title={
+            closureGate?.is_blocked
+              ? 'Closure blocked: Unverified consignee acknowledgements remain.'
+              : 'Submit for case closure disposition'
+          }
+        >
+          <CheckCircle2 size={13} />
+          {isClosed ? 'Case Closed & Archived' : 'Request Case Closure'}
         </button>
       </div>
 
-      {/* Modal 1: Signed Phone Attestation */}
+      {/* MODAL 1: Phone Attestation Modal */}
       {isPhoneModalOpen && (
         <div
           style={{
@@ -323,68 +252,87 @@ export function ApprovalGate({
             left: 0,
             width: '100vw',
             height: '100vh',
-            background: 'rgba(0, 0, 0, 0.8)',
-            zIndex: 150,
+            background: 'rgba(0, 0, 0, 0.75)',
+            zIndex: 100,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             padding: '20px',
           }}
+          onClick={() => setIsPhoneModalOpen(false)}
         >
-          <div className="glass-panel" style={{ maxWidth: '520px', width: '100%', padding: '22px' }}>
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: '6px', color: 'var(--accent-cyan)' }}>
-              Signed Phone Verification Attestation (ACK-006)
-            </h3>
-            <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '14px' }}>
-              FDA compliance requires full operator identity, contact person, timestamp, and free-text notes before verifying oral receipt.
-            </p>
-            <form onSubmit={handlePhoneSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '0.78rem' }}>
+          <div
+            className="card-panel"
+            style={{
+              maxWidth: '520px',
+              width: '100%',
+              background: 'var(--bg-surface)',
+              border: '1px solid var(--border-medium)',
+              padding: '20px',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <PhoneCall size={16} style={{ color: 'var(--accent-primary)' }} />
+                <h3 style={{ fontSize: '14px', fontWeight: 600 }}>Phone Attestation Record (ACK-006)</h3>
+              </div>
+              <button className="btn btn-ghost" style={{ padding: '4px' }} onClick={() => setIsPhoneModalOpen(false)}>
+                <X size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handlePhoneSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '12px' }}>
               <div>
-                <label style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '2px' }}>CALLER IDENTITY (CUSTOMER OPS):</label>
+                <label className="section-label" style={{ display: 'block', marginBottom: '2px' }}>Caller Identifier</label>
                 <input
                   type="text"
                   value={callerId}
                   onChange={(e) => setCallerId(e.target.value)}
-                  style={{ width: '100%', padding: '6px 10px', background: 'rgba(0,0,0,0.5)', border: '1px solid var(--border-subtle)', borderRadius: '6px', color: '#fff' }}
+                  style={{ width: '100%' }}
                   required
                 />
               </div>
+
               <div>
-                <label style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '2px' }}>RECIPIENT CONTACT NAME & ROLE:</label>
+                <label className="section-label" style={{ display: 'block', marginBottom: '2px' }}>Recipient Contact</label>
                 <input
                   type="text"
                   value={recipientContact}
                   onChange={(e) => setRecipientContact(e.target.value)}
-                  style={{ width: '100%', padding: '6px 10px', background: 'rgba(0,0,0,0.5)', border: '1px solid var(--border-subtle)', borderRadius: '6px', color: '#fff' }}
+                  style={{ width: '100%' }}
                   required
                 />
               </div>
+
               <div>
-                <label style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '2px' }}>PHONE NUMBER DIALED:</label>
+                <label className="section-label" style={{ display: 'block', marginBottom: '2px' }}>Phone Number & Timestamp</label>
                 <input
                   type="text"
                   value={recipientPhone}
                   onChange={(e) => setRecipientPhone(e.target.value)}
-                  style={{ width: '100%', padding: '6px 10px', background: 'rgba(0,0,0,0.5)', border: '1px solid var(--border-subtle)', borderRadius: '6px', color: '#fff' }}
+                  style={{ width: '100%' }}
                   required
                 />
               </div>
+
               <div>
-                <label style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '2px' }}>MANDATORY ATTESTATION RECORD / CALL NOTES:</label>
+                <label className="section-label" style={{ display: 'block', marginBottom: '2px' }}>Attestation Notes</label>
                 <textarea
                   value={attestationNotes}
                   onChange={(e) => setAttestationNotes(e.target.value)}
                   rows={3}
-                  style={{ width: '100%', padding: '6px 10px', background: 'rgba(0,0,0,0.5)', border: '1px solid var(--border-subtle)', borderRadius: '6px', color: '#fff', resize: 'none' }}
+                  style={{ width: '100%' }}
                   required
                 />
               </div>
+
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '10px' }}>
-                <button type="button" className="btn-kinetic btn-secondary" onClick={() => setIsPhoneModalOpen(false)}>
+                <button type="button" className="btn btn-ghost" onClick={() => setIsPhoneModalOpen(false)}>
                   Cancel
                 </button>
-                <button type="submit" className="btn-kinetic btn-primary">
-                  Sign & Attach SHA-256 Digest
+                <button type="submit" className="btn btn-primary">
+                  Sign & Record Attestation
                 </button>
               </div>
             </form>
@@ -392,7 +340,7 @@ export function ApprovalGate({
         </div>
       )}
 
-      {/* Modal 2: Symmetrical Dual-Signature Release */}
+      {/* MODAL 2: Dual-Signature Release Rail Modal */}
       {isReleaseModalOpen && (
         <div
           style={{
@@ -401,90 +349,81 @@ export function ApprovalGate({
             left: 0,
             width: '100vw',
             height: '100vh',
-            background: 'rgba(0, 0, 0, 0.8)',
-            zIndex: 150,
+            background: 'rgba(0, 0, 0, 0.75)',
+            zIndex: 100,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             padding: '20px',
           }}
+          onClick={() => setIsReleaseModalOpen(false)}
         >
-          <div className="glass-panel" style={{ maxWidth: '600px', width: '100%', padding: '22px' }}>
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: '4px', color: 'var(--accent-emerald)' }}>
-              Dual-Signature Inventory Release Authorization
-            </h3>
-            <p style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', marginBottom: '12px' }}>
-              Releasing product into commerce requires negative lab re-test documentation hash AND symmetrical signatures from both QA Lead and Recall Coordinator.
-            </p>
-            <form onSubmit={handleReleaseSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.76rem' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                <div>
-                  <label style={{ display: 'block', color: 'var(--text-muted)' }}>RE-TEST DOC ID:</label>
-                  <input
-                    type="text"
-                    value={retestDocId}
-                    onChange={(e) => setRetestDocId(e.target.value)}
-                    style={{ width: '100%', padding: '5px 8px', background: 'rgba(0,0,0,0.5)', border: '1px solid var(--border-subtle)', borderRadius: '6px', color: '#fff' }}
-                    required
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', color: 'var(--text-muted)' }}>RE-TEST LAB SHA-256 HASH:</label>
-                  <input
-                    type="text"
-                    value={retestDocHash}
-                    onChange={(e) => setRetestDocHash(e.target.value)}
-                    style={{ width: '100%', padding: '5px 8px', background: 'rgba(0,0,0,0.5)', border: '1px solid var(--border-subtle)', borderRadius: '6px', color: '#fff' }}
-                    required
-                  />
-                </div>
+          <div
+            className="card-panel"
+            style={{
+              maxWidth: '560px',
+              width: '100%',
+              background: 'var(--bg-surface)',
+              border: '1px solid var(--border-medium)',
+              padding: '20px',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <FileCheck size={16} style={{ color: 'var(--accent-primary)' }} />
+                <h3 style={{ fontSize: '14px', fontWeight: 600 }}>Dual-Signature Hold Release Rail</h3>
               </div>
+              <button className="btn btn-ghost" style={{ padding: '4px' }} onClick={() => setIsReleaseModalOpen(false)}>
+                <X size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handleReleaseSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '12px' }}>
+              <div style={{ background: 'var(--bg-surface-subtle)', padding: '8px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)', fontSize: '11px', color: 'var(--text-muted)' }}>
+                Step 1: QA Lead biological clearance → Step 2: Closure Authority inventory release.
+              </div>
+
               <div>
-                <label style={{ display: 'block', color: 'var(--text-muted)' }}>QA LEAD SIGNATURE (Dr. Elena Rostova):</label>
+                <label className="section-label" style={{ display: 'block', marginBottom: '2px' }}>Lab Re-test Document ID</label>
                 <input
                   type="text"
-                  value={qaSignature}
-                  onChange={(e) => setQaSignature(e.target.value)}
-                  style={{ width: '100%', padding: '5px 8px', background: 'rgba(0,0,0,0.5)', border: '1px solid var(--border-subtle)', borderRadius: '6px', color: '#fff' }}
+                  value={retestDocId}
+                  onChange={(e) => setRetestDocId(e.target.value)}
+                  style={{ width: '100%' }}
                   required
                 />
               </div>
+
               <div>
-                <label style={{ display: 'block', color: 'var(--text-muted)' }}>QA BIOLOGICAL RATIONALE:</label>
+                <label className="section-label" style={{ display: 'block', marginBottom: '2px' }}>Re-test SHA-256 Digest</label>
+                <input
+                  type="text"
+                  value={retestDocHash}
+                  onChange={(e) => setRetestDocHash(e.target.value)}
+                  className="mono-val"
+                  style={{ width: '100%', fontSize: '11px' }}
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="section-label" style={{ display: 'block', marginBottom: '2px' }}>QA Clearance Rationale</label>
                 <input
                   type="text"
                   value={qaRationale}
                   onChange={(e) => setQaRationale(e.target.value)}
-                  style={{ width: '100%', padding: '5px 8px', background: 'rgba(0,0,0,0.5)', border: '1px solid var(--border-subtle)', borderRadius: '6px', color: '#fff' }}
+                  style={{ width: '100%' }}
                   required
                 />
               </div>
-              <div>
-                <label style={{ display: 'block', color: 'var(--text-muted)' }}>RECALL COORDINATOR SIGNATURE (Marcus Vance):</label>
-                <input
-                  type="text"
-                  value={coordSignature}
-                  onChange={(e) => setCoordSignature(e.target.value)}
-                  style={{ width: '100%', padding: '5px 8px', background: 'rgba(0,0,0,0.5)', border: '1px solid var(--border-subtle)', borderRadius: '6px', color: '#fff' }}
-                  required
-                />
-              </div>
-              <div>
-                <label style={{ display: 'block', color: 'var(--text-muted)' }}>OPERATIONAL CLEARANCE RATIONALE:</label>
-                <input
-                  type="text"
-                  value={coordRationale}
-                  onChange={(e) => setCoordRationale(e.target.value)}
-                  style={{ width: '100%', padding: '5px 8px', background: 'rgba(0,0,0,0.5)', border: '1px solid var(--border-subtle)', borderRadius: '6px', color: '#fff' }}
-                  required
-                />
-              </div>
+
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '10px' }}>
-                <button type="button" className="btn-kinetic btn-secondary" onClick={() => setIsReleaseModalOpen(false)}>
+                <button type="button" className="btn btn-ghost" onClick={() => setIsReleaseModalOpen(false)}>
                   Cancel
                 </button>
-                <button type="submit" className="btn-kinetic btn-emerald">
-                  Authorize Dual Release & Clear Hold
+                <button type="submit" className="btn btn-primary">
+                  Sign & Authorize Release
                 </button>
               </div>
             </form>
@@ -492,7 +431,7 @@ export function ApprovalGate({
         </div>
       )}
 
-      {/* Modal 3: Documented Non-Response Closure */}
+      {/* MODAL 3: Non-Response 21 CFR § 7.49 Modal */}
       {isNonResponseModalOpen && (
         <div
           style={{
@@ -501,56 +440,80 @@ export function ApprovalGate({
             left: 0,
             width: '100vw',
             height: '100vh',
-            background: 'rgba(0, 0, 0, 0.8)',
-            zIndex: 150,
+            background: 'rgba(0, 0, 0, 0.75)',
+            zIndex: 100,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             padding: '20px',
           }}
+          onClick={() => setIsNonResponseModalOpen(false)}
         >
-          <div className="glass-panel" style={{ maxWidth: '520px', width: '100%', padding: '22px' }}>
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: '4px', color: 'var(--accent-amber)' }}>
-              Certified Good-Faith Closure (21 CFR § 7.49)
-            </h3>
-            <p style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', marginBottom: '12px' }}>
-              When a consignee is non-responsive after repeated documented attempts, regulatory guidelines permit case closure with certified district office referral.
-            </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.76rem' }}>
+          <div
+            className="card-panel"
+            style={{
+              maxWidth: '520px',
+              width: '100%',
+              background: 'var(--bg-surface)',
+              border: '1px solid var(--border-medium)',
+              padding: '20px',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <ShieldCheck size={16} style={{ color: 'var(--accent-primary)' }} />
+                <h3 style={{ fontSize: '14px', fontWeight: 600 }}>21 CFR § 7.49 Non-Response Closure</h3>
+              </div>
+              <button className="btn btn-ghost" style={{ padding: '4px' }} onClick={() => setIsNonResponseModalOpen(false)}>
+                <X size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handleNonResponseSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '12px' }}>
               <div>
-                <label style={{ display: 'block', color: 'var(--text-muted)' }}>REGULATORY FILING NUMBER:</label>
+                <label className="section-label" style={{ display: 'block', marginBottom: '2px' }}>FDA Regulatory Filing ID</label>
                 <input
                   type="text"
-                  defaultValue="FDA-DISTRICT-ESCALATION-2026-08-01"
-                  readOnly
-                  style={{ width: '100%', padding: '5px 8px', background: 'rgba(0,0,0,0.5)', border: '1px solid var(--border-subtle)', borderRadius: '6px', color: '#fff' }}
+                  value={regFilingId}
+                  onChange={(e) => setRegFilingId(e.target.value)}
+                  style={{ width: '100%' }}
+                  required
                 />
               </div>
+
               <div>
-                <label style={{ display: 'block', color: 'var(--text-muted)' }}>VERIFIED CONTACT ATTEMPTS:</label>
+                <label className="section-label" style={{ display: 'block', marginBottom: '2px' }}>Documented Attempt Count (Minimum 3)</label>
                 <input
-                  type="text"
-                  defaultValue="3 attempts (Phone, Certified Email, Courier Delivery)"
-                  readOnly
-                  style={{ width: '100%', padding: '5px 8px', background: 'rgba(0,0,0,0.5)', border: '1px solid var(--border-subtle)', borderRadius: '6px', color: '#fff' }}
+                  type="number"
+                  min={3}
+                  value={attemptCount}
+                  onChange={(e) => setAttemptCount(parseInt(e.target.value) || 3)}
+                  style={{ width: '100%' }}
+                  required
                 />
               </div>
+
+              <div>
+                <label className="section-label" style={{ display: 'block', marginBottom: '2px' }}>Good-Faith Legal Certification Notes</label>
+                <textarea
+                  value={goodFaithNotes}
+                  onChange={(e) => setGoodFaithNotes(e.target.value)}
+                  rows={3}
+                  style={{ width: '100%' }}
+                  required
+                />
+              </div>
+
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '10px' }}>
-                <button type="button" className="btn-kinetic btn-secondary" onClick={() => setIsNonResponseModalOpen(false)}>
+                <button type="button" className="btn btn-ghost" onClick={() => setIsNonResponseModalOpen(false)}>
                   Cancel
                 </button>
-                <button
-                  type="button"
-                  className="btn-kinetic btn-primary"
-                  onClick={() => {
-                    onCloseWithNonResponse();
-                    setIsNonResponseModalOpen(false);
-                  }}
-                >
-                  Certify Good-Faith & Close Case
+                <button type="submit" className="btn btn-primary">
+                  Certify & Close Under § 7.49
                 </button>
               </div>
-            </div>
+            </form>
           </div>
         </div>
       )}
