@@ -6,6 +6,7 @@ from typing import Annotated, Literal
 
 from pydantic import Field, TypeAdapter
 
+from .identifiers import ActionIntent
 from .models import DomainRecord, Identifier, NonNegativeVersion
 
 
@@ -59,12 +60,59 @@ class RequestClosureCommand(CommandRecord):
     outstanding_acknowledgement_ids: tuple[Identifier, ...] = ()
 
 
+class ApprovalCommand(CommandRecord):
+    """A human decision request; the principal supplies the approver identity."""
+
+    approval_id: Identifier
+    rationale: str
+
+
+class ApproveScopeCommand(ApprovalCommand):
+    kind: Literal["approve_scope"]
+    scope_id: Identifier
+    scope_version: NonNegativeVersion
+    policy_version: Identifier
+
+
+class ApproveContainmentCommand(ApprovalCommand):
+    kind: Literal["approve_containment"]
+    scope_id: Identifier
+    scope_version: NonNegativeVersion
+    policy_version: Identifier
+
+
+class ApproveNotificationCommand(ApprovalCommand):
+    kind: Literal["approve_notification"]
+    scope_id: Identifier
+    scope_version: NonNegativeVersion
+    packet_id: Identifier
+    payload_version: Identifier
+    policy_version: Identifier
+
+
+class ApproveClosureCommand(ApprovalCommand):
+    kind: Literal["approve_closure"]
+    closure_id: Identifier
+    policy_version: Identifier
+    effectiveness_evidence_ids: Annotated[tuple[Identifier, ...], Field(min_length=1)]
+
+
+class ExecuteStandingPolicyCommand(CommandRecord):
+    kind: Literal["execute_standing_policy"]
+    intent: ActionIntent
+
+
 type CommandValue = Annotated[
     ProposeScopeCommand
     | RequestContainmentCommand
     | SendNotificationCommand
     | RecordAcknowledgementCommand
-    | RequestClosureCommand,
+    | RequestClosureCommand
+    | ApproveScopeCommand
+    | ApproveContainmentCommand
+    | ApproveNotificationCommand
+    | ApproveClosureCommand
+    | ExecuteStandingPolicyCommand,
     Field(discriminator="kind"),
 ]
 Command = TypeAdapter(CommandValue)

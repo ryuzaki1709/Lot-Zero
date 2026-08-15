@@ -13,7 +13,7 @@ def valid_case() -> dict[str, object]:
     return {
         "case_id": "CASE-001",
         "tenant_id": "EVAL-TENANT-01",
-        "phase": "signal_review",
+        "phase": "signal_received",
         "case_version": 1,
         "source_record_ids": ("LAB-SIGNAL-20260814-001",),
         "created_at": datetime(2026, 8, 14, 12, tzinfo=UTC),

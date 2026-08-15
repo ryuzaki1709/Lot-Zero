@@ -12,7 +12,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, Field
 
-from .models import DomainRecord, Identifier, NonNegativeVersion
+from .models import DomainRecord, Identifier, NonNegativeQuantity, NonNegativeVersion
 
 type JsonScalar = None | bool | int | float | str
 type JsonValue = (
@@ -37,6 +37,9 @@ class ActionIntent(DomainRecord):
     policy_version: Identifier
     target_record_ids: Annotated[tuple[Identifier, ...], Field(min_length=1)]
     payload_hash: Identifier
+    quantity: NonNegativeQuantity | None = None
+    reversible: bool | None = None
+    expires_at: datetime | None = None
 
 
 def _canonical_decimal(value: Decimal) -> dict[str, str | int]:

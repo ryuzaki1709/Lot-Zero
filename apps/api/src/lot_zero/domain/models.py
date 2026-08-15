@@ -67,7 +67,13 @@ class RecallCase(DomainRecord):
     case_id: Identifier
     tenant_id: Identifier
     phase: Literal[
-        "signal_review", "scope_review", "containment", "notification", "closure", "closed"
+        "signal_received",
+        "scope_review",
+        "provisional_containment",
+        "action_review",
+        "ack_monitoring",
+        "effectiveness_check",
+        "closed",
     ]
     case_version: NonNegativeVersion
     source_record_ids: Annotated[tuple[Identifier, ...], Field(min_length=1)]
@@ -137,6 +143,9 @@ class ApprovalDecision(DomainRecord):
     approver_id: Identifier
     case_version: NonNegativeVersion
     boundary_version: Identifier
+    scope_version: NonNegativeVersion | None = None
+    payload_version: Identifier | None = None
+    policy_version: Identifier | None = None
     decided_at: datetime
 
 
@@ -175,6 +184,33 @@ class LedgerEntry(DomainRecord):
     created_at: datetime
 
 
+class RecoveryState(DomainRecord):
+    """An orthogonal pause which can only return to its originating phase."""
+
+    status: Literal["needs_information", "failed_retryable", "blocked"]
+    parent_phase: Literal[
+        "signal_received",
+        "scope_review",
+        "provisional_containment",
+        "action_review",
+        "ack_monitoring",
+        "effectiveness_check",
+        "closed",
+    ]
+    return_phase: Literal[
+        "signal_received",
+        "scope_review",
+        "provisional_containment",
+        "action_review",
+        "ack_monitoring",
+        "effectiveness_check",
+        "closed",
+    ]
+    reason_record_ids: Annotated[tuple[Identifier, ...], Field(min_length=1)]
+    retry_attempt: NonNegativeVersion | None = None
+    retry_limit: NonNegativeVersion | None = None
+
+
 class IncidentState(DomainRecord):
     case: RecallCase
     scopes: tuple[AffectedScope, ...] = ()
@@ -184,4 +220,5 @@ class IncidentState(DomainRecord):
     acknowledgements: tuple[Acknowledgement, ...] = ()
     approvals: tuple[ApprovalDecision, ...] = ()
     ledger: tuple[LedgerEntry, ...] = ()
+    recovery: RecoveryState | None = None
     updated_at: datetime
