@@ -126,8 +126,8 @@ python scripts/verify_cloud_deploy.py https://lot-zero-1051797806634.us-central1
    [PASS] Root SPA serves bundled Vite frontend.
 2. Resetting incident state to baseline...
    [PASS] Reset incident state.
-3. Executing safety signal extraction via Gemini 3.5 Flash...
-   [PASS] Gemini Model: gemini-3.5-flash (Google GenAI Replay)
+3. Executing safety signal extraction via Gemini on Vertex AI...
+   [PASS] Gemini Model: gemini-3.5-flash (Vertex AI Live)
 4. Testing Separation of Duties (wrong-role denial)...
    -> Status Code: 403, Detail: requester and approver must be different people
    [PASS] Server enforced 403 refusal on unauthorized role.
@@ -137,7 +137,7 @@ python scripts/verify_cloud_deploy.py https://lot-zero-1051797806634.us-central1
    [PASS] Recall notices dispatched.
 7. Exporting cryptographic audit bundle and verifying hash chain...
    -> Total Ledger Entries: 11
-   -> Top-Level Digest: 7a8be84f0bea289db6f53b3bb285494bab9be77bc62f92b6f946f468cf425743
+   -> Top-Level Digest: dc6c993281ef299ac751488697fed70a69f3366da252de938019a971f5a5bd72
    [PASS] Cryptographic audit hash chain 100% verified.
 
 ================================================================
@@ -156,10 +156,10 @@ python scripts/verify_cloud_deploy.py https://lot-zero-1051797806634.us-central1
  
 URL:     https://lot-zero-1051797806634.us-central1.run.app
 Ingress: all
-Traffic: 100% LATEST (currently lot-zero-00004-7zh)
+Traffic: 100% LATEST (currently lot-zero-00006-dhw)
 Scaling: Auto (Min: 0, Max: 1)
 
-Image: us-central1-docker.pkg.dev/project-b2c3348e-d718-4255-be2/cloud-run-source-deploy/lot-zero@sha256:65487c96f45904fe285c3117e5bb4d95c851dfa34111039dfee0354a11794d6a
+Image: us-central1-docker.pkg.dev/project-b2c3348e-d718-4255-be2/cloud-run-source-deploy/lot-zero@sha256:6ef8e74e47cf7a1a0c8b3ebf2bf05ef343274291f03f7e6f85fa3240e94bb10b
 Port: 8080 | Memory: 512Mi | CPU: 1
 Volume Mounts:
   /app/data -> event-store-vol (GCS Bucket: lot-zero-events-project-b2c3348e-d718-4255-be2)
@@ -168,18 +168,20 @@ Secrets:
 Env Vars:
   GOOGLE_GENAI_USE_VERTEXAI: true
   GOOGLE_CLOUD_PROJECT: project-b2c3348e-d718-4255-be2
-  GOOGLE_CLOUD_LOCATION: us-central1
+  GOOGLE_CLOUD_LOCATION: global
 ```
 
 ### Step 5.2 — Live Execution Logs Snippet
 
 ```text
-2026-08-16T08:58:03Z  INFO: POST /api/evaluation/reset HTTP/1.1 200 OK
-2026-08-16T08:58:05Z  INFO: POST /api/evaluation/simulate-signal HTTP/1.1 200 OK
-2026-08-16T08:58:06Z  INFO: POST /api/evaluation/approve-containment HTTP/1.1 403 Forbidden
-2026-08-16T08:58:07Z  INFO: POST /api/evaluation/approve-containment HTTP/1.1 200 OK
-2026-08-16T08:58:07Z  INFO: POST /api/evaluation/dispatch-outbox HTTP/1.1 200 OK
-2026-08-16T08:58:08Z  INFO: GET  /api/cases/EVAL-CASE-01/audit-export HTTP/1.1 200 OK
+2026-08-16T09:10:04Z  INFO: GET / HTTP/1.1 200 OK
+2026-08-16T09:10:05Z  INFO: POST /api/evaluation/reset HTTP/1.1 200 OK
+2026-08-16T09:10:13Z  [Gemini Agent] Successfully executed live on Vertex AI (location=global, model=gemini-3.5-flash)
+2026-08-16T09:10:14Z  INFO: POST /api/evaluation/simulate-signal HTTP/1.1 200 OK
+2026-08-16T09:10:14Z  INFO: POST /api/evaluation/approve-containment HTTP/1.1 403 Forbidden
+2026-08-16T09:10:15Z  INFO: POST /api/evaluation/approve-containment HTTP/1.1 200 OK
+2026-08-16T09:10:15Z  INFO: POST /api/evaluation/dispatch-outbox HTTP/1.1 200 OK
+2026-08-16T09:10:16Z  INFO: GET  /api/cases/EVAL-CASE-01/audit-export HTTP/1.1 200 OK
 ```
 
 ---
