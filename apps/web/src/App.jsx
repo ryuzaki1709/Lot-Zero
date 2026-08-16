@@ -419,7 +419,15 @@ export function App() {
       </div>
 
       {/* Main Operational 3-Column Cockpit */}
-      <main className="cockpit-grid">
+      <main
+        style={{
+          margin: '0 24px',
+          display: 'grid',
+          gridTemplateColumns: 'minmax(280px, 1fr) minmax(360px, 1.4fr) minmax(280px, 1fr)',
+          gap: '16px',
+          alignItems: 'start',
+        }}
+      >
         {/* Global Denial/Error Surface (Group 1c) */}
         {feedback && (
           <div
@@ -465,17 +473,7 @@ export function App() {
         )}
 
         {/* Column 1: Signal Ingestion & Citations */}
-        <section
-          className="cockpit-sticky-column"
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '16px',
-            position: 'sticky',
-            top: '72px',
-            alignSelf: 'start',
-          }}
-        >
+        <section style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <SignalViewer signal={signal} scopes={projection?.scopes} modelName={modelName} />
         </section>
 
