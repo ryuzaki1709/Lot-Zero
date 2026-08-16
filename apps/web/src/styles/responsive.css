@@ -162,7 +162,20 @@ canvas {
    Six stages never fit a phone. Make it an honest horizontal rail: snap
    points, no scrollbar chrome, and an edge fade so it reads as scrollable. */
 
+.stepper-container {
+  width: 100%;
+  max-width: var(--shell-max);
+  margin-inline: auto;
+  min-width: 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 .stepper {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  overflow-x: auto;
   scroll-snap-type: x proximity;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;

@@ -22,6 +22,7 @@ export function ApprovalGate({
   approvals,
   closureGate,
   containmentActions = [],
+  acknowledgements = [],
 }) {
   const [rationale, setRationale] = useState(
     'Authorized containment under policy EVAL-HOLD-01 based on positive lab Salmonella finding.'
@@ -57,7 +58,9 @@ export function ApprovalGate({
   const nonResponseFirstInputRef = useRef(null);
 
   const isQaApproved = approvals?.some((a) => a.decision === 'approved' && a.approval_type === 'containment');
-  const isOutboxDispatched = ['ack_monitoring', 'effectiveness_check', 'closed'].includes(phase);
+  const isOutboxDispatched =
+    ['ack_monitoring', 'effectiveness_check', 'closed'].includes(phase) ||
+    (acknowledgements && acknowledgements.length > 0);
   const isAckResolved = !closureGate?.is_blocked && isOutboxDispatched;
   const isClosed = phase === 'closed';
 
