@@ -8,7 +8,7 @@
 **Why We Built an Event-Sourced Kernel for Gemini 3.5: Deterministic Food Safety Recalls on Google Cloud Run**
 
 ### Summary / Subtitle:
-How we combined Gemini 3.5 on Google Vertex AI, an append-only event store on GCS FUSE, strict Separation of Duties, and SHA-256 hash chains to build a regulated recall workspace.
+How we combined Gemini 3.5 Flash on Google Vertex AI, an append-only event store on GCS FUSE, strict Separation of Duties, and SHA-256 hash chains to build a regulated recall workspace.
 
 ---
 
@@ -22,8 +22,8 @@ In this post, we explore the architecture of **Lot Zero**, an open-source recall
 
 ---
 
-### Pillar 1: Multimodal Ingestion with Character-Offset Grounding
-Safety notices from third-party laboratories arrive as unstructured text or PDFs. Using the official `google-genai` SDK on **Google Vertex AI** with Application Default Credentials (ADC), Lot Zero invokes `gemini-3.5-flash` to extract:
+### Pillar 1: Grounded Extraction with Character-Offset Citations
+Safety notices from analytical testing laboratories arrive as unstructured text reports. Using the official `google-genai` SDK on **Google Vertex AI** (`location="global"`) with Application Default Credentials (ADC), Lot Zero invokes `gemini-3.5-flash` to extract:
 1. Contaminated raw ingredient lot numbers (`ING-4417`)
 2. Pathogen classifications (`Salmonella enterica`)
 3. Exact character-offset citation spans tied directly to the source report's SHA-256 hash.
@@ -34,8 +34,8 @@ import os
 
 client = genai.Client(
     vertexai=True,
-    project=os.getenv("GOOGLE_CLOUD_PROJECT"),
-    location=os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
+    project=os.getenv("GOOGLE_CLOUD_PROJECT", "project-b2c3348e-d718-4255-be2"),
+    location=os.getenv("GOOGLE_CLOUD_LOCATION", "global")
 )
 
 response = client.models.generate_content(
@@ -44,7 +44,7 @@ response = client.models.generate_content(
 )
 ```
 
-The AI extracts structured signals, but the domain kernel verifies that every claim is bounded by verifiable document spans.
+The AI extracts structured signals, but the domain kernel verifies that every claim is bounded by verifiable document spans and isolates finished products (`FP-100-L240814-A` and `B`) while keeping clean controls (`FP-100-ADJ`) unblocked.
 
 ---
 
@@ -52,7 +52,7 @@ The AI extracts structured signals, but the domain kernel verifies that every cl
 In the chaos of an active incident, organizational hierarchy is often breached. In Lot Zero, the domain authority kernel enforces strict role separation:
 - A **Recall Coordinator** can propose scope and simulate signals.
 - A **QA Lead** must independently sign off on firm quarantines.
-- If the requester attempts to approve their own scope, the kernel immediately rejects the command with **HTTP 403 Forbidden**.
+- If the requester attempts to approve their own scope, the kernel immediately rejects the command with **HTTP 403 Forbidden** (`requester and approver must be different people`).
 
 ---
 
@@ -73,8 +73,8 @@ If any bad actor reorders events, edits timestamps, or omits a refusal, the top-
 ---
 
 ### Conclusion & Links
-- **Live Cloud Run Demo**: [lot-zero-1051797806634.us-central1.run.app](https://lot-zero-1051797806634.us-central1.run.app)
-- **Architecture & Code**: [GitHub Repository](https://github.com/your-username/lot-zero)
+- **Live Cloud Run Demo**: [https://lot-zero-1051797806634.us-central1.run.app](https://lot-zero-1051797806634.us-central1.run.app)
+- **GitHub Repository**: [https://github.com/saisujanreddy/lot-zero](https://github.com/saisujanreddy/lot-zero)
 - **119 Tests Passing**: Contracts, optimistic concurrency, and audit tamper tests verified 100%.
 
 ---
@@ -91,7 +91,7 @@ Live demo: https://lot-zero-1051797806634.us-central1.run.app
 
 **Post 2/5**:
 1️⃣ Grounded Extraction:
-Raw Salmonella lab notices are ingested via Gemini 3.5 Flash on Vertex AI (ADC). Citations are bound to character-level offsets and anchored to the source lab document's SHA-256 digest. No hallucinated inventory counts.
+Raw Salmonella lab notices are ingested via Gemini 3.5 Flash on Vertex AI (global endpoint, ADC). Citations are bound to character-level offsets and anchored to the source lab document's SHA-256 digest. No hallucinated inventory counts.
 
 **Post 3/5**:
 2️⃣ Server-Enforced Separation of Duties:
@@ -129,5 +129,6 @@ Key Architecture Highlights:
 
 Explore the live deployed platform on Google Cloud:
 🔗 Live Service: https://lot-zero-1051797806634.us-central1.run.app
+📁 Source Code: https://github.com/saisujanreddy/lot-zero
 
 #GoogleCloud #VertexAI #Gemini #SoftwareEngineering #EventSourcing #FastAPI #React #CyberSecurity
