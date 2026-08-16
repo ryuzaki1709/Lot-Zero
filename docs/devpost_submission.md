@@ -6,6 +6,7 @@
 - **Hackathon Category**: The Taskmaster
 - **Live Cloud Run URL**: [https://lot-zero-1051797806634.us-central1.run.app](https://lot-zero-1051797806634.us-central1.run.app)
 - **GitHub Repository**: [https://github.com/ryuzaki1709/lot-zero](https://github.com/ryuzaki1709/lot-zero)
+- **Video Demo (YouTube)**: [https://youtu.be/YOUR_VIDEO_ID](https://youtu.be/YOUR_VIDEO_ID)
 - **Local Spin-Up Instructions**: See [README.md](../README.md) for full local and container instructions.
 
 ---
@@ -98,3 +99,7 @@ Lot Zero is built on a full-stack, enterprise-grade architecture utilizing **4 G
 - **What's Next**:
   - Direct integration with FDA Electronic Submissions Gateway (ESG) for automated 21 CFR § 7.49 status filings.
   - Multi-tenant Cloud SQL (Postgres) persistence for enterprise multi-plant operations.
+
+---
+
+> *Disclosure: This project was created for the purposes of entering the All Things Agentic Hackathon.*
