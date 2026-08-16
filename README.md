@@ -5,7 +5,7 @@
 
 [![Live Service](https://img.shields.io/badge/Google_Cloud_Run-Live_Demo-4285F4?style=for-the-badge&logo=googlecloud&logoColor=white)](https://lot-zero-1051797806634.us-central1.run.app)
 [![Gemini 3.5](https://img.shields.io/badge/Vertex_AI-Gemini_3.5_Flash-34A853?style=for-the-badge&logo=googlegemini&logoColor=white)](https://cloud.google.com/vertex-ai)
-[![Tests](https://img.shields.io/badge/Pytest-119_Passed-00C853?style=for-the-badge&logo=pytest&logoColor=white)](tests/)
+[![Tests](https://img.shields.io/badge/Pytest-119_Passed-00C853?style=for-the-badge&logo=pytest&logoColor=white)](apps/api/tests/)
 
 **Live Production Deployment**: [**https://lot-zero-1051797806634.us-central1.run.app**](https://lot-zero-1051797806634.us-central1.run.app)
 
