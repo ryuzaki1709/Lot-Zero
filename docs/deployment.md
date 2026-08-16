@@ -137,7 +137,7 @@ python scripts/verify_cloud_deploy.py https://lot-zero-1051797806634.us-central1
    [PASS] Recall notices dispatched.
 7. Exporting cryptographic audit bundle and verifying hash chain...
    -> Total Ledger Entries: 11
-   -> Top-Level Digest: 1a97d9749671e2e82f827722b1be8538891d55bdd607496493fb84065cafec87
+   -> Top-Level Digest: 7a8be84f0bea289db6f53b3bb285494bab9be77bc62f92b6f946f468cf425743
    [PASS] Cryptographic audit hash chain 100% verified.
 
 ================================================================
@@ -156,27 +156,30 @@ python scripts/verify_cloud_deploy.py https://lot-zero-1051797806634.us-central1
  
 URL:     https://lot-zero-1051797806634.us-central1.run.app
 Ingress: all
-Traffic: 100% LATEST (currently lot-zero-00003-28v)
+Traffic: 100% LATEST (currently lot-zero-00004-7zh)
 Scaling: Auto (Min: 0, Max: 1)
 
-Image: us-central1-docker.pkg.dev/project-b2c3348e-d718-4255-be2/cloud-run-source-deploy/lot-zero@sha256:50adaf75d08a43ab1c66af7a362455284a593a921c591fd00d4ec742fd94eb9a
+Image: us-central1-docker.pkg.dev/project-b2c3348e-d718-4255-be2/cloud-run-source-deploy/lot-zero@sha256:65487c96f45904fe285c3117e5bb4d95c851dfa34111039dfee0354a11794d6a
 Port: 8080 | Memory: 512Mi | CPU: 1
 Volume Mounts:
   /app/data -> event-store-vol (GCS Bucket: lot-zero-events-project-b2c3348e-d718-4255-be2)
 Secrets:
-  GEMINI_API_KEY -> gemini-api-key:latest
   LOT_ZERO_SSE_SECRET -> lot-zero-sse-secret:latest
+Env Vars:
+  GOOGLE_GENAI_USE_VERTEXAI: true
+  GOOGLE_CLOUD_PROJECT: project-b2c3348e-d718-4255-be2
+  GOOGLE_CLOUD_LOCATION: us-central1
 ```
 
 ### Step 5.2 — Live Execution Logs Snippet
 
 ```text
-2026-08-16T08:38:26Z  INFO: POST /api/evaluation/reset HTTP/1.1 200 OK
-2026-08-16T08:38:28Z  INFO: POST /api/evaluation/simulate-signal HTTP/1.1 200 OK
-2026-08-16T08:38:29Z  INFO: POST /api/evaluation/approve-containment HTTP/1.1 403 Forbidden
-2026-08-16T08:38:30Z  INFO: POST /api/evaluation/approve-containment HTTP/1.1 200 OK
-2026-08-16T08:38:31Z  INFO: POST /api/evaluation/dispatch-outbox HTTP/1.1 200 OK
-2026-08-16T08:38:31Z  INFO: GET /api/cases/EVAL-CASE-01/audit-export HTTP/1.1 200 OK
+2026-08-16T08:58:03Z  INFO: POST /api/evaluation/reset HTTP/1.1 200 OK
+2026-08-16T08:58:05Z  INFO: POST /api/evaluation/simulate-signal HTTP/1.1 200 OK
+2026-08-16T08:58:06Z  INFO: POST /api/evaluation/approve-containment HTTP/1.1 403 Forbidden
+2026-08-16T08:58:07Z  INFO: POST /api/evaluation/approve-containment HTTP/1.1 200 OK
+2026-08-16T08:58:07Z  INFO: POST /api/evaluation/dispatch-outbox HTTP/1.1 200 OK
+2026-08-16T08:58:08Z  INFO: GET  /api/cases/EVAL-CASE-01/audit-export HTTP/1.1 200 OK
 ```
 
 ---
