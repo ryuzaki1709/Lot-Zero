@@ -48,13 +48,19 @@ def analyze_safety_signal(
                 "3. Character start and end offsets for each claim in the text.\n\n"
                 f"TEXT:\n{raw_notice_text}"
             )
+            # Try available Vertex AI publisher models in us-central1
+            vertex_model = "gemini-2.5-flash"
             response = client.models.generate_content(
-                model="gemini-3.5-flash",
+                model=vertex_model,
                 contents=prompt,
             )
-            model_tag = "gemini-3.5-flash (Vertex AI Live)"
-        except Exception:
-            model_tag = "gemini-3.5-flash (Google GenAI Replay)"
+            model_tag = f"{vertex_model} (Vertex AI Live)"
+            print(f"[Gemini Agent] Successfully executed live on Vertex AI with model '{vertex_model}'", flush=True)
+        except Exception as e:
+            import traceback
+            print(f"[Gemini Agent] Vertex AI Exception: {type(e).__name__}: {e}", flush=True)
+            traceback.print_exc()
+            model_tag = "gemini-2.5-flash (Google GenAI Replay)"
     elif gemini_key:
         try:
             from google import genai
