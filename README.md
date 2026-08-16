@@ -123,7 +123,7 @@ gcloud run deploy lot-zero \
 
 Verify the live deployment with the smoke-test script:
 ```bash
-python scripts/verify_cloud_deploy.py <DEPLOYED_SERVICE_URL>
+python scripts/verify_cloud_deploy.py https://lot-zero-1051797806634.us-central1.run.app
 ```
 
 ---

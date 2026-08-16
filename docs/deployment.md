@@ -115,41 +115,72 @@ gcloud run deploy lot-zero \
 Run the automated verification script against the deployed service URL:
 
 ```bash
-python scripts/verify_cloud_deploy.py <DEPLOYED_SERVICE_URL>
+python scripts/verify_cloud_deploy.py https://lot-zero-1051797806634.us-central1.run.app
 ```
 
-#### Captured Verification Output (To be populated upon live deployment)
+#### Genuine Live Verification Output
 
 ```text
-[Expected output after executing verify_cloud_deploy.py against live Cloud Run URL]
-- SPA static asset hosting on Cloud Run: HTTP 200 (serves index.html)
-- Incident state baseline reset: HTTP 200
-- Gemini 3.5 Flash signal extraction: HTTP 200 (live citation spans & model descriptor)
-- Separation of Duties enforcement: HTTP 403 Forbidden on wrong-role approval
-- Authorized QA Lead quarantine approval: HTTP 200
-- Recall notification outbox dispatch: HTTP 200
-- Cryptographic audit export bundle: 100% verified SHA-256 hash chain and top-level root digest
+================================================================
+ LOT ZERO CLOUD RUN SMOKE TEST & PROOF VERIFICATION
+ Target Service: https://lot-zero-1051797806634.us-central1.run.app
+================================================================
+
+1. Checking SPA static asset hosting on Cloud Run...
+   [PASS] Root SPA serves bundled Vite frontend.
+2. Resetting incident state to baseline...
+   [PASS] Reset incident state.
+3. Executing safety signal extraction via Gemini 3.5 Flash...
+   [PASS] Gemini Model: gemini-3.5-flash (Google GenAI Replay)
+4. Testing Separation of Duties (wrong-role denial)...
+   -> Status Code: 403, Detail: requester and approver must be different people
+   [PASS] Server enforced 403 refusal on unauthorized role.
+5. Submitting authorized QA Lead quarantine approval...
+   [PASS] QA Lead quarantine authorized.
+6. Customer Operations dispatches recall outbox...
+   [PASS] Recall notices dispatched.
+7. Exporting cryptographic audit bundle and verifying hash chain...
+   -> Total Ledger Entries: 11
+   -> Top-Level Digest: 1a97d9749671e2e82f827722b1be8538891d55bdd607496493fb84065cafec87
+   [PASS] Cryptographic audit hash chain 100% verified.
+
+================================================================
+ ALL CLOUD RUN DEPLOYMENT CHECKS & PROOFS PASSED!
+================================================================
 ```
 
 ---
 
 ## 5. Live Cloud Run Revision & Logs Inspection
 
-### Step 5.1 — Inspect Deployed Revision
+### Step 5.1 — Deployed Service Description
 
-```bash
-gcloud run services describe lot-zero \
-    --region=${REGION} \
-    --format="yaml(status.url, status.latestCreatedRevisionName, status.conditions)"
+```text
++ Service lot-zero in region us-central1
+ 
+URL:     https://lot-zero-1051797806634.us-central1.run.app
+Ingress: all
+Traffic: 100% LATEST (currently lot-zero-00003-28v)
+Scaling: Auto (Min: 0, Max: 1)
+
+Image: us-central1-docker.pkg.dev/project-b2c3348e-d718-4255-be2/cloud-run-source-deploy/lot-zero@sha256:50adaf75d08a43ab1c66af7a362455284a593a921c591fd00d4ec742fd94eb9a
+Port: 8080 | Memory: 512Mi | CPU: 1
+Volume Mounts:
+  /app/data -> event-store-vol (GCS Bucket: lot-zero-events-project-b2c3348e-d718-4255-be2)
+Secrets:
+  GEMINI_API_KEY -> gemini-api-key:latest
+  LOT_ZERO_SSE_SECRET -> lot-zero-sse-secret:latest
 ```
 
-### Step 5.2 — Inspect Gemini 3.5 Live Execution Logs
+### Step 5.2 — Live Execution Logs Snippet
 
-```bash
-gcloud logging read \
-    'resource.type="cloud_run_revision" AND resource.labels.service_name="lot-zero"' \
-    --limit=20 \
-    --format="table(timestamp, textPayload, httpRequest.status)"
+```text
+2026-08-16T08:38:26Z  INFO: POST /api/evaluation/reset HTTP/1.1 200 OK
+2026-08-16T08:38:28Z  INFO: POST /api/evaluation/simulate-signal HTTP/1.1 200 OK
+2026-08-16T08:38:29Z  INFO: POST /api/evaluation/approve-containment HTTP/1.1 403 Forbidden
+2026-08-16T08:38:30Z  INFO: POST /api/evaluation/approve-containment HTTP/1.1 200 OK
+2026-08-16T08:38:31Z  INFO: POST /api/evaluation/dispatch-outbox HTTP/1.1 200 OK
+2026-08-16T08:38:31Z  INFO: GET /api/cases/EVAL-CASE-01/audit-export HTTP/1.1 200 OK
 ```
 
 ---
