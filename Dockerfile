@@ -15,6 +15,8 @@ WORKDIR /app
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     LOT_ZERO_DB_PATH=/app/data/lot_zero.db \
+    PATH="/usr/local/bin:/root/.local/bin:${PATH}" \
+    PYTHONPATH="/app/apps/api/src:${PYTHONPATH}" \
     PORT=8080
 
 # Install system dependencies
@@ -22,12 +24,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies & package in editable/wheel mode
-COPY apps/api/pyproject.toml apps/api/
-RUN pip install --no-cache-dir ./apps/api
-
-# Copy API application source
+# Copy API application source & install dependencies
 COPY apps/api /app/apps/api
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -e /app/apps/api
 
 # Copy built frontend assets to static mount location
 COPY --from=frontend-builder /app/web/dist /app/apps/web/dist
@@ -38,4 +38,4 @@ RUN mkdir -p /app/data
 EXPOSE 8080
 
 WORKDIR /app/apps/api
-CMD ["sh", "-c", "uvicorn lot_zero.app:app --host 0.0.0.0 --port ${PORT:-8080}"]
+CMD ["sh", "-c", "python -m uvicorn lot_zero.app:app --host 0.0.0.0 --port ${PORT:-8080}"]
