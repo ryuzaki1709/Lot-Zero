@@ -18,33 +18,11 @@ export function HowItWorksModal({ isOpen, onClose }) {
 
   return (
     <div
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        width: '100vw',
-        height: '100vh',
-        background: 'rgba(0, 0, 0, 0.75)',
-        zIndex: 100,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '20px',
-      }}
+      className="modal-overlay"
       onClick={onClose}
     >
       <div
-        className="card-panel"
-        style={{
-          maxWidth: '700px',
-          width: '100%',
-          maxHeight: '90vh',
-          overflowY: 'auto',
-          padding: '24px',
-          background: 'var(--bg-surface)',
-          border: '1px solid var(--border-medium)',
-          position: 'relative',
-        }}
+        className="modal-panel modal-panel-lg" style={{ position: 'relative' }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Close Button */}

@@ -86,7 +86,7 @@ export function CaseDashboard({
           No cases match this filter.
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px' }}>
+        <div className="grid-auto-sm">
           {cases.map((c) => {
             const isSelected = c.case_id === currentCaseId;
             return (

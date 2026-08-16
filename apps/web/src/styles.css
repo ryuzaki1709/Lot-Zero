@@ -1,5 +1,5 @@
-:root {
-}
+/* Entry stylesheet. The design system lives in styles/antigravity.css and the
+   responsive layer in styles/responsive.css, both imported from App.jsx. */
 
 * {
   box-sizing: border-box;
@@ -9,13 +9,6 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  min-height: 100dvh;
   -webkit-font-smoothing: antialiased;
-}
-
-.mobile-prototype {
-  width: min(100vw, 390px);
-  height: min(100dvh, 844px);
-  margin-inline: auto;
-  overflow: hidden;
-  position: relative;
 }

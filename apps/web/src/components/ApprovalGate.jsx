@@ -441,30 +441,11 @@ export function ApprovalGate({
       {/* MODAL 1: Phone Attestation Modal */}
       {isPhoneModalOpen && (
         <div
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            width: '100vw',
-            height: '100vh',
-            background: 'rgba(0, 0, 0, 0.75)',
-            zIndex: 100,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '20px',
-          }}
+          className="modal-overlay"
           onClick={() => setIsPhoneModalOpen(false)}
         >
           <div
-            className="card-panel"
-            style={{
-              maxWidth: '520px',
-              width: '100%',
-              background: 'var(--bg-surface)',
-              border: '1px solid var(--border-medium)',
-              padding: '20px',
-            }}
+            className="modal-panel modal-panel-sm"
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
@@ -539,30 +520,11 @@ export function ApprovalGate({
       {/* MODAL 2: Dual-Signature Release Rail Modal (Group 1b & 5c) */}
       {isReleaseModalOpen && (
         <div
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            width: '100vw',
-            height: '100vh',
-            background: 'rgba(0, 0, 0, 0.75)',
-            zIndex: 100,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '20px',
-          }}
+          className="modal-overlay"
           onClick={() => setIsReleaseModalOpen(false)}
         >
           <div
-            className="card-panel"
-            style={{
-              maxWidth: '560px',
-              width: '100%',
-              background: 'var(--bg-surface)',
-              border: '1px solid var(--border-medium)',
-              padding: '20px',
-            }}
+            className="modal-panel modal-panel-md"
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
@@ -654,30 +616,11 @@ export function ApprovalGate({
       {/* MODAL 3: Non-Response 21 CFR § 7.49 Modal */}
       {isNonResponseModalOpen && (
         <div
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            width: '100vw',
-            height: '100vh',
-            background: 'rgba(0, 0, 0, 0.75)',
-            zIndex: 100,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '20px',
-          }}
+          className="modal-overlay"
           onClick={() => setIsNonResponseModalOpen(false)}
         >
           <div
-            className="card-panel"
-            style={{
-              maxWidth: '520px',
-              width: '100%',
-              background: 'var(--bg-surface)',
-              border: '1px solid var(--border-medium)',
-              padding: '20px',
-            }}
+            className="modal-panel modal-panel-sm"
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>

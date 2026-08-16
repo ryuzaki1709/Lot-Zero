@@ -2,7 +2,12 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- viewport-fit=cover lets the layout extend under the notch/home indicator,
+         which our env(safe-area-inset-*) padding then compensates for.
+         No maximum-scale/user-scalable: pinch-zoom must stay available (WCAG 1.4.4). -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#080C0A" />
+    <meta name="color-scheme" content="dark" />
     <title>Lot Zero · Evidence-Backed Recall Incident Workspace</title>
     <meta name="description" content="Deterministic evidence-backed recall scope and containment workspace for food manufacturers. Built for Google All Things Agentic Hackathon." />
     <link rel="preconnect" href="https://fonts.googleapis.com" />

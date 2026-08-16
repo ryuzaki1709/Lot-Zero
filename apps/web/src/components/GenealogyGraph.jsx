@@ -148,7 +148,7 @@ export function GenealogyGraph({ genealogy, metrics, phase, isQaApproved }) {
         {arrow('Packaging lines')}
 
         {/* Downstream batches */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
+        <div className="grid-auto-xs">
           {finishedNodes.map((b) => {
             const isReleased = b.hold_status === 'released_negative_retest';
             const isQuarantined = b.hold_status === 'quarantine_active';

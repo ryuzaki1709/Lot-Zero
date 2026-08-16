@@ -405,7 +405,9 @@ export function App() {
         sseConnected={sseConnected}
       />
 
-      <StageProgress phase={phase} metrics={metrics} closureGate={closureGate} />
+      <div className="stepper-container">
+        <StageProgress phase={phase} metrics={metrics} closureGate={closureGate} />
+      </div>
 
       {/* Group 4a: Context selection (CaseDashboard) directly under StageProgress */}
       <div className="case-dashboard-container">
