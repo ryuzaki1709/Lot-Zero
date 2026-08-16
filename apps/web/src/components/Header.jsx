@@ -127,7 +127,7 @@ export function Header({
       {/* Page header */}
       <div className="page">
         <div className="page-header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px', flexWrap: 'wrap' }}>
             <span className="status-tag">Evaluation tenant · synthetic records</span>
             <span className="status-tag">{modelName}</span>
           </div>

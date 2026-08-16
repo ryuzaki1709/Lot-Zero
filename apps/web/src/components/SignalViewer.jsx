@@ -24,7 +24,7 @@ export function SignalViewer({ signal, scopes, modelName }) {
           No signal loaded yet. Use “Simulate signal” to ingest the evaluation lab report.
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '16px', alignItems: 'start' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {/* Source document */}
           <div className="card-panel">
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', marginBottom: '16px', fontSize: '13px', color: 'var(--text-muted)', flexWrap: 'wrap' }}>

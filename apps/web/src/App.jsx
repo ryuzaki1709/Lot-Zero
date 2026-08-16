@@ -9,6 +9,7 @@ import { ApprovalGate } from './components/ApprovalGate';
 import { EvidenceLedger } from './components/EvidenceLedger';
 import { HowItWorksModal } from './components/HowItWorksModal';
 import './styles/antigravity.css';
+import './styles/responsive.css';
 
 const API_BASE = '';
 
@@ -389,7 +390,7 @@ export function App() {
   );
 
   return (
-    <div style={{ minHeight: '100vh', paddingBottom: '32px', maxWidth: '1600px', margin: '0 auto' }}>
+    <div className="app-shell">
       <KineticBackground />
 
       <Header
@@ -407,7 +408,7 @@ export function App() {
       <StageProgress phase={phase} metrics={metrics} closureGate={closureGate} />
 
       {/* Group 4a: Context selection (CaseDashboard) directly under StageProgress */}
-      <div style={{ margin: '0 24px 16px' }}>
+      <div className="case-dashboard-container">
         <CaseDashboard
           currentCaseId={currentCaseId}
           onSelectCase={(id) => setCurrentCaseId(id)}
@@ -418,16 +419,8 @@ export function App() {
         />
       </div>
 
-      {/* Main Operational 3-Column Cockpit */}
-      <main
-        style={{
-          margin: '0 24px',
-          display: 'grid',
-          gridTemplateColumns: 'minmax(280px, 1fr) minmax(360px, 1.4fr) minmax(280px, 1fr)',
-          gap: '16px',
-          alignItems: 'start',
-        }}
-      >
+      {/* Main Operational Responsive Cockpit */}
+      <main className="cockpit-grid">
         {/* Global Denial/Error Surface (Group 1c) */}
         {feedback && (
           <div
@@ -473,12 +466,12 @@ export function App() {
         )}
 
         {/* Column 1: Signal Ingestion & Citations */}
-        <section style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <section className="cockpit-column">
           <SignalViewer signal={signal} scopes={projection?.scopes} modelName={modelName} />
         </section>
 
         {/* Column 2: Bidirectional DAG & Decision Gates */}
-        <section style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <section className="cockpit-column">
           <GenealogyGraph
             genealogy={genealogy}
             metrics={metrics}
@@ -501,7 +494,7 @@ export function App() {
         </section>
 
         {/* Column 3: Evidence Ledger, Signed Audit Signatures & Consignee Acks */}
-        <section style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <section className="cockpit-column">
           <EvidenceLedger
             acknowledgements={acks}
             closureGate={closureGate}

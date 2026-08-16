@@ -76,7 +76,7 @@ export function GenealogyGraph({ genealogy, metrics, phase, isQaApproved }) {
         </div>
       </div>
 
-      <div className="card-panel" style={{ padding: '24px' }}>
+      <div className="card-panel" style={{ overflowX: 'auto' }}>
         {/* Supplier Node */}
         {supplierNode && (
           <div

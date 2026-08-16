@@ -316,7 +316,7 @@ export function ApprovalGate({
           </div>
 
           {/* Dual-Signature Rail Step Status Indicators */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '4px' }}>
+          <div className="dual-signature-grid">
             <div
               style={{
                 background: 'var(--bg-surface)',

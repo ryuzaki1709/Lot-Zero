@@ -1,0 +1,553 @@
+/* ============================================================================
+   Lot Zero — responsive layer
+   Loaded AFTER antigravity.css. Owns everything layout/viewport related so the
+   base design system stays a pure token + component sheet.
+
+   Breakpoint ladder (mobile-first reading, written desktop-down to match the
+   existing sheet's style):
+     >= 1180px   full 3-column cockpit
+     900–1179px  2-column cockpit (evidence ledger drops to full width)
+     640–899px   single column, tablet density
+     < 640px     single column, phone density
+     < 400px     compact phone
+   ========================================================================== */
+
+/* ---------- 1. Global overflow + sizing guards ------------------------------
+   The #1 mobile bug: a fixed 3-column grid with a ~950px minimum forced the
+   whole document wider than the viewport. These guards make that impossible
+   to reintroduce accidentally. */
+
+html {
+  -webkit-text-size-adjust: 100%; /* stop iOS Safari inflating text in landscape */
+  text-size-adjust: 100%;
+}
+
+html,
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+  overscroll-behavior-y: none;
+}
+
+body {
+  min-width: 0;
+  /* dvh tracks the collapsing URL bar; vh does not. Fallback first. */
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* Grid and flex children default to min-width:auto, which refuses to shrink
+   below their content. This is what clipped the mono hashes and lot IDs. */
+main,
+section,
+article,
+.card-panel,
+.section,
+.section-head,
+.stat,
+.step {
+  min-width: 0;
+}
+
+/* Long unbroken tokens: SHA-256 hashes, lot IDs, batch codes. */
+.mono-val,
+.doc-block,
+.def-row dd,
+.stat-value {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+img,
+svg,
+video,
+canvas {
+  max-width: 100%;
+  height: auto;
+}
+
+/* ---------- 2. Shared layout primitives ---------------------------------- */
+
+/* One container, one gutter. Previously the header used `.page` (max 1080px)
+   while <main> used `margin: 0 24px` inside a 1600px shell, so the header text
+   column and the cockpit didn't line up at any width. */
+:root {
+  --shell-max: 1600px;
+  --gutter: 24px;
+  --topbar-h: 56px;
+  --safe-l: env(safe-area-inset-left, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+}
+
+.container {
+  width: 100%;
+  max-width: var(--shell-max);
+  margin-inline: auto;
+  padding-inline: calc(var(--gutter) + var(--safe-l)) calc(var(--gutter) + var(--safe-r));
+}
+
+/* Bring `.page` and `.topbar-inner` onto the same rail as the cockpit. */
+.page,
+.topbar-inner {
+  max-width: var(--shell-max);
+  padding-inline: calc(var(--gutter) + var(--safe-l)) calc(var(--gutter) + var(--safe-r));
+}
+
+.page {
+  padding-bottom: 0;
+}
+
+/* ---------- 3. The cockpit grid ------------------------------------------
+   Replaces the hardcoded `minmax(280px,1fr) minmax(360px,1.4fr) minmax(280px,1fr)`
+   inline style in App.jsx. */
+
+.cockpit {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+  padding-bottom: calc(32px + var(--safe-b));
+}
+
+.cockpit > .cockpit-full {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 1179px) {
+  .cockpit {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  /* Evidence ledger spans the full row rather than being crushed. */
+  .cockpit > .cockpit-col-3 {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 899px) {
+  .cockpit {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+  .cockpit > .cockpit-col-3 {
+    grid-column: auto;
+  }
+}
+
+/* ---------- 4. Auto-fit grids that were overflowing ----------------------
+   `repeat(auto-fit, minmax(340px, 1fr))` cannot go below 340px, so inside a
+   narrow column (or a 360px phone) it blew past the viewport. The
+   `min(<n>px, 100%)` idiom clamps the track to the available width. */
+
+.grid-auto,
+.grid-auto-sm,
+.grid-auto-xs {
+  display: grid;
+  gap: 16px;
+  align-items: start;
+}
+
+.grid-auto {
+  grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr));
+}
+
+.grid-auto-sm {
+  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
+  gap: 12px;
+}
+
+.grid-auto-xs {
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+}
+
+/* ---------- 5. Top bar ---------------------------------------------------- */
+
+.topbar {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.topbar-inner {
+  min-height: var(--topbar-h);
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+
+.topbar-brand {
+  min-width: 0;
+  flex-shrink: 1;
+}
+
+.topbar-actions {
+  flex-shrink: 0;
+  flex-wrap: nowrap;
+}
+
+/* Below tablet the action row becomes a horizontally scrollable rail instead
+   of wrapping and doubling the sticky header height. */
+@media (max-width: 899px) {
+  .topbar-inner {
+    flex-wrap: wrap;
+  }
+  .topbar-actions {
+    width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 2px;
+  }
+  .topbar-actions::-webkit-scrollbar {
+    display: none;
+  }
+  .topbar-actions > select {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+}
+
+/* ---------- 6. Stepper -----------------------------------------------------
+   `.stepper` rendered outside any container, so on mobile the first label sat
+   flush against the screen edge and the rest scrolled off with no affordance. */
+
+.stepper {
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  /* Fade the right edge so it reads as scrollable. */
+  -webkit-mask-image: linear-gradient(to right, #000 0, #000 92%, transparent 100%);
+  mask-image: linear-gradient(to right, #000 0, #000 92%, transparent 100%);
+}
+
+.stepper::-webkit-scrollbar {
+  display: none;
+}
+
+.step {
+  scroll-snap-align: start;
+}
+
+@media (min-width: 900px) {
+  /* No overflow at desktop widths — drop the fade so it isn't a phantom effect. */
+  .stepper {
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+}
+
+@media (max-width: 639px) {
+  .stepper {
+    margin-top: 28px;
+    gap: 4px;
+  }
+  .step {
+    min-width: 120px;
+    flex: 0 0 auto;
+  }
+  .step-name,
+  .step-desc {
+    padding-right: 12px;
+  }
+}
+
+/* ---------- 7. Tabs ------------------------------------------------------- */
+
+.tabs {
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x proximity;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.tab {
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+  /* Touch target height without changing the visual underline position. */
+  min-height: 40px;
+}
+
+@media (max-width: 639px) {
+  .tabs {
+    gap: 18px;
+  }
+}
+
+/* ---------- 8. Touch targets & pointer-aware hover ------------------------
+   Icon-only ghost buttons were 4px padding ≈ 24px tall — well under the 44px
+   WCAG 2.5.5 / iOS HIG minimum. */
+
+@media (pointer: coarse) {
+  .btn,
+  .tab,
+  button,
+  [role='button'] {
+    min-height: 44px;
+  }
+
+  .btn {
+    padding-block: 10px;
+  }
+
+  input,
+  select,
+  textarea {
+    min-height: 44px;
+    /* < 16px triggers iOS Safari's auto zoom-on-focus. */
+    font-size: 16px;
+  }
+
+  .citation-highlight {
+    /* Easier to hit without changing layout. */
+    padding-block: 2px;
+  }
+}
+
+/* Hover styles stick on touch devices after a tap. Gate them. */
+@media (hover: none) {
+  .card-panel-interactive:hover {
+    background-color: var(--bg-surface);
+    border-color: var(--border-subtle);
+  }
+  .btn-secondary:hover:not(:disabled),
+  .btn-ghost:hover:not(:disabled) {
+    background-color: transparent;
+  }
+}
+
+/* ---------- 9. Modals ------------------------------------------------------
+   `width: 100vw` includes the scrollbar gutter on desktop, producing a
+   permanent horizontal scrollbar; `height: 100vh` is cut off by mobile browser
+   chrome. Both replaced by `inset: 0` + dvh. */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  height: 100dvh;
+  background: rgba(0, 0, 0, 0.75);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  padding-top: max(20px, env(safe-area-inset-top, 0px));
+  padding-bottom: max(20px, env(safe-area-inset-bottom, 0px));
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+.modal-panel {
+  width: 100%;
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-medium);
+}
+
+@media (max-width: 639px) {
+  .modal-overlay {
+    /* Bottom sheet on phones — reachable with a thumb. */
+    align-items: flex-end;
+    padding: 0;
+  }
+  .modal-panel {
+    max-width: none;
+    max-height: 92dvh;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    border-bottom: none;
+    padding-bottom: calc(20px + var(--safe-b));
+  }
+}
+
+/* ---------- 10. Definition rows ------------------------------------------ */
+
+@media (max-width: 479px) {
+  .def-row {
+    gap: 12px;
+  }
+  .def-row dt {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .def-row dd {
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+}
+
+/* ---------- 11. Density ladder ------------------------------------------- */
+
+/* Tablet */
+@media (max-width: 899px) {
+  :root {
+    --gutter: 20px;
+  }
+  .section {
+    margin-top: 40px;
+  }
+  .section-head {
+    align-items: flex-start;
+  }
+}
+
+/* Phone */
+@media (max-width: 639px) {
+  :root {
+    --gutter: 16px;
+  }
+
+  html,
+  body {
+    font-size: 14.5px;
+  }
+
+  .page-header {
+    padding-top: 24px;
+  }
+
+  .page-title {
+    font-size: clamp(20px, 5.6vw, 24px);
+  }
+
+  .page-subtitle {
+    font-size: 14px;
+  }
+
+  .section {
+    margin-top: 32px;
+  }
+
+  .section-title {
+    font-size: 16.5px;
+  }
+
+  .section-desc {
+    font-size: 13px;
+  }
+
+  .card-panel {
+    padding: 16px;
+    border-radius: var(--radius-lg);
+  }
+
+  .doc-block {
+    padding: 14px;
+    font-size: 11.5px;
+    line-height: 1.7;
+    overflow-x: auto;
+  }
+
+  .stat-value {
+    font-size: 22px;
+  }
+
+  /* 2-up stats with proper interior padding, no dangling right border. */
+  .stat-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .stat {
+    padding: 16px 12px 16px 0;
+  }
+  .stat + .stat {
+    padding-left: 0;
+  }
+  .stat:nth-child(odd) {
+    border-right: 1px solid var(--border-subtle);
+    padding-right: 14px;
+  }
+  .stat:nth-child(even) {
+    border-right: none;
+    padding-left: 14px;
+  }
+
+  .section-head {
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+}
+
+/* Compact phone (iPhone SE / 360px Android) */
+@media (max-width: 399px) {
+  :root {
+    --gutter: 12px;
+  }
+  .doc-block {
+    font-size: 11px;
+  }
+  .stat-value {
+    font-size: 20px;
+  }
+  .btn {
+    padding-inline: 10px;
+    font-size: 12.5px;
+  }
+}
+
+/* ---------- 12. Landscape phones ------------------------------------------ */
+
+@media (max-height: 480px) and (orientation: landscape) {
+  .topbar {
+    position: static; /* reclaim vertical space */
+  }
+  .page-header {
+    padding-top: 16px;
+  }
+  .section {
+    margin-top: 24px;
+  }
+  .modal-overlay {
+    align-items: flex-start;
+  }
+  .modal-panel {
+    max-height: 100dvh;
+  }
+}
+
+/* ---------- 13. Ambient background cost ----------------------------------- */
+
+/* The two large radial gradients + kinetic canvas are expensive to composite
+   on mobile GPUs and invisible at that size anyway. */
+@media (max-width: 639px) {
+  body::before {
+    background: radial-gradient(600px 320px at 50% -10%, rgba(0, 220, 130, 0.06), transparent 65%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ---------- 14. Print ------------------------------------------------------ */
+
+@media print {
+  .topbar,
+  .stepper,
+  .btn,
+  .tabs {
+    display: none !important;
+  }
+  .cockpit {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  body::before {
+    display: none;
+  }
+  html,
+  body {
+    background: #fff;
+    color: #000;
+  }
+}
