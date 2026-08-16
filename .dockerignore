@@ -1,0 +1,13 @@
+.git
+.gitignore
+.venv
+**/node_modules
+**/dist
+**/.pytest_cache
+**/__pycache__
+**/*.pyc
+*.db
+*.db-journal
+.system_generated
+docs/architecture.png
+docs/architecture.svg
