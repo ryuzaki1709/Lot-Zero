@@ -68,7 +68,7 @@ All API endpoints strictly require authentication via the `X-API-Key` header. Pr
 ### 1. Clone & Set Up Backend
 ```bash
 # Clone the repository
-git clone https://github.com/saisujanreddy/lot-zero.git
+git clone https://github.com/ryuzaki1709/lot-zero.git
 cd lot-zero/apps/api
 
 # Create and activate Python virtual environment

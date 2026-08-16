@@ -10,6 +10,8 @@
 ### Summary / Subtitle:
 How we combined Gemini 3.5 Flash on Google Vertex AI, an append-only event store on GCS FUSE, strict Separation of Duties, and SHA-256 hash chains to build a regulated recall workspace.
 
+> *Disclosure: This project was created for the purposes of entering the All Things Agentic Hackathon.*
+
 ---
 
 ### Article Body:
@@ -74,7 +76,7 @@ If any bad actor reorders events, edits timestamps, or omits a refusal, the top-
 
 ### Conclusion & Links
 - **Live Cloud Run Demo**: [https://lot-zero-1051797806634.us-central1.run.app](https://lot-zero-1051797806634.us-central1.run.app)
-- **GitHub Repository**: [https://github.com/saisujanreddy/lot-zero](https://github.com/saisujanreddy/lot-zero)
+- **GitHub Repository**: [https://github.com/ryuzaki1709/lot-zero](https://github.com/ryuzaki1709/lot-zero)
 - **119 Tests Passing**: Contracts, optimistic concurrency, and audit tamper tests verified 100%.
 
 ---
@@ -87,6 +89,7 @@ If any bad actor reorders events, edits timestamps, or omits a refusal, the top-
 Introducing **Lot Zero** — an evidence-backed food safety incident workspace built with @GoogleCloud & #Gemini3.5 on Vertex AI.
 
 Live demo: https://lot-zero-1051797806634.us-central1.run.app
+GitHub: https://github.com/ryuzaki1709/lot-zero
 🧵👇 #GoogleCloud #VertexAI #AgenticAI #BuildWithAI
 
 **Post 2/5**:
@@ -129,6 +132,8 @@ Key Architecture Highlights:
 
 Explore the live deployed platform on Google Cloud:
 🔗 Live Service: https://lot-zero-1051797806634.us-central1.run.app
-📁 Source Code: https://github.com/saisujanreddy/lot-zero
+📁 Source Code: https://github.com/ryuzaki1709/lot-zero
+
+*(Note: Created for the purposes of entering the All Things Agentic Hackathon)*
 
 #GoogleCloud #VertexAI #Gemini #SoftwareEngineering #EventSourcing #FastAPI #React #CyberSecurity

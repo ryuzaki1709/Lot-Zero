@@ -5,7 +5,7 @@
 - **Tagline**: An industrial-grade, event-sourced recall workspace powered by Gemini 3.5 on Vertex AI, strict Separation of Duties, and tamper-evident cryptographic audit chains.
 - **Hackathon Category**: The Taskmaster
 - **Live Cloud Run URL**: [https://lot-zero-1051797806634.us-central1.run.app](https://lot-zero-1051797806634.us-central1.run.app)
-- **GitHub Repository**: [https://github.com/saisujanreddy/lot-zero](https://github.com/saisujanreddy/lot-zero)
+- **GitHub Repository**: [https://github.com/ryuzaki1709/lot-zero](https://github.com/ryuzaki1709/lot-zero)
 - **Local Spin-Up Instructions**: See [README.md](../README.md) for full local and container instructions.
 
 ---
