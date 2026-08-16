@@ -159,14 +159,14 @@ export function ApprovalGate({
       </div>
 
       {/* Decision Actions Grid */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
         {/* Gate 1: QA Containment Approval with Inline Rationale Input (Group 4c) */}
         <div
           style={{
             background: 'var(--bg-surface-subtle)',
             border: '1px solid var(--border-subtle)',
             borderRadius: 'var(--radius-md)',
-            padding: '12px',
+            padding: '14px',
             display: 'flex',
             flexDirection: 'column',
             gap: '8px',
@@ -216,7 +216,7 @@ export function ApprovalGate({
             background: 'var(--bg-surface-subtle)',
             border: '1px solid var(--border-subtle)',
             borderRadius: 'var(--radius-md)',
-            padding: '12px',
+            padding: '14px',
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
@@ -250,7 +250,7 @@ export function ApprovalGate({
             background: 'var(--bg-surface-subtle)',
             border: '1px solid var(--border-subtle)',
             borderRadius: 'var(--radius-md)',
-            padding: '12px',
+            padding: '14px',
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
@@ -284,7 +284,7 @@ export function ApprovalGate({
             background: 'var(--bg-surface-subtle)',
             border: '1px solid var(--border-subtle)',
             borderRadius: 'var(--radius-md)',
-            padding: '12px',
+            padding: '14px',
             display: 'flex',
             flexDirection: 'column',
             gap: '8px',
@@ -371,7 +371,7 @@ export function ApprovalGate({
             background: 'var(--bg-surface-subtle)',
             border: '1px solid var(--border-subtle)',
             borderRadius: 'var(--radius-md)',
-            padding: '12px',
+            padding: '14px',
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
@@ -405,7 +405,7 @@ export function ApprovalGate({
             background: 'var(--bg-surface-subtle)',
             border: '1px solid var(--border-subtle)',
             borderRadius: 'var(--radius-md)',
-            padding: '12px',
+            padding: '14px',
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',

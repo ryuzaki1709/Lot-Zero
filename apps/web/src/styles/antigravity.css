@@ -479,6 +479,17 @@ input:disabled, select:disabled, textarea:disabled { opacity: 0.5; cursor: not-a
 ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.12); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.24); }
 
+@media (max-width: 1024px) {
+  .cockpit-grid {
+    grid-template-columns: 1fr !important;
+    margin: 0 16px !important;
+  }
+  .cockpit-sticky-column {
+    position: static !important;
+    top: auto !important;
+  }
+}
+
 @media (max-width: 720px) {
   .page, .topbar-inner { padding-left: 20px; padding-right: 20px; }
   .stat { border-right: none; padding-left: 0; }
