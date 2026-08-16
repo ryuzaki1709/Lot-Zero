@@ -31,8 +31,31 @@ def analyze_safety_signal(
     """Analyze raw laboratory notice text, extract contaminated lot and bounding evidence spans."""
     now = datetime.now(UTC)
 
+    use_vertex = os.getenv("GOOGLE_GENAI_USE_VERTEXAI", "").strip().lower() in ("true", "1", "yes")
     gemini_key = os.getenv("GEMINI_API_KEY")
-    if gemini_key:
+
+    if use_vertex:
+        try:
+            from google import genai
+
+            project = os.getenv("GOOGLE_CLOUD_PROJECT")
+            location = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
+            client = genai.Client(vertexai=True, project=project, location=location)
+            prompt = (
+                "You are an industrial safety recall specialist. Analyze this laboratory notification and extract: "
+                "1. The exact raw ingredient lot number "
+                "2. The identified pathogen "
+                "3. Character start and end offsets for each claim in the text.\n\n"
+                f"TEXT:\n{raw_notice_text}"
+            )
+            response = client.models.generate_content(
+                model="gemini-3.5-flash",
+                contents=prompt,
+            )
+            model_tag = "gemini-3.5-flash (Vertex AI Live)"
+        except Exception:
+            model_tag = "gemini-3.5-flash (Google GenAI Replay)"
+    elif gemini_key:
         try:
             from google import genai
 
@@ -44,7 +67,6 @@ def analyze_safety_signal(
                 "3. Character start and end offsets for each claim in the text.\n\n"
                 f"TEXT:\n{raw_notice_text}"
             )
-            # Make the Gemini call
             response = client.models.generate_content(
                 model="gemini-3.5-flash",
                 contents=prompt,

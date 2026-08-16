@@ -67,30 +67,26 @@ gcloud storage buckets add-iam-policy-binding gs://lot-zero-events-${PROJECT_ID}
 ### Step 3.3 — Create Secrets in Google Cloud Secret Manager
 
 ```bash
-# 1. Create and populate GEMINI_API_KEY secret (prompted from your Google AI Studio key)
-echo -n "<YOUR_GEMINI_API_KEY>" | gcloud secrets create gemini-api-key \
-    --data-file=- \
-    --replication-policy="automatic"
-
-# 2. Create and populate LOT_ZERO_SSE_SECRET (random 32-byte hex secret)
+# 1. Create and populate LOT_ZERO_SSE_SECRET (random 32-byte hex secret)
 echo -n "$(openssl rand -hex 32)" | gcloud secrets create lot-zero-sse-secret \
     --data-file=- \
     --replication-policy="automatic"
 
-# Grant Secret Accessor role to Cloud Run service account
-gcloud secrets add-iam-policy-binding gemini-api-key \
-    --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
-    --role="roles/secretmanager.secretAccessor"
-
+# 2. Grant Secret Accessor role on lot-zero-sse-secret to Cloud Run compute service account
 gcloud secrets add-iam-policy-binding lot-zero-sse-secret \
     --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
     --role="roles/secretmanager.secretAccessor"
+
+# 3. Grant Vertex AI user role for enterprise Gemini 3.5 ADC authentication
+gcloud projects add-iam-policy-binding ${PROJECT_ID} \
+    --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
+    --role="roles/aiplatform.user"
 ```
 
 ### Step 3.4 — Deploy Service to Google Cloud Run
 
 ```bash
-# Deploy directly from source via Cloud Build with GCS volume mount and Secret Manager bindings
+# Deploy directly from source via Cloud Build with GCS volume mount, Vertex AI ADC, and Secret Manager bindings
 gcloud run deploy lot-zero \
     --source=. \
     --region=${REGION} \
@@ -100,8 +96,8 @@ gcloud run deploy lot-zero \
     --max-instances=1 \
     --memory=512Mi \
     --cpu=1 \
-    --set-env-vars="LOT_ZERO_DB_PATH=/app/data/lot_zero.db,LOT_ZERO_TENANT_ID=EVAL-TENANT-01" \
-    --set-secrets="GEMINI_API_KEY=gemini-api-key:latest,LOT_ZERO_SSE_SECRET=lot-zero-sse-secret:latest" \
+    --set-env-vars="LOT_ZERO_DB_PATH=/app/data/lot_zero.db,LOT_ZERO_TENANT_ID=EVAL-TENANT-01,GOOGLE_GENAI_USE_VERTEXAI=true,GOOGLE_CLOUD_PROJECT=project-b2c3348e-d718-4255-be2,GOOGLE_CLOUD_LOCATION=us-central1" \
+    --set-secrets="LOT_ZERO_SSE_SECRET=lot-zero-sse-secret:latest" \
     --add-volume=name=event-store-vol,type=cloud-storage,bucket=lot-zero-events-${PROJECT_ID} \
     --add-volume-mount=volume=event-store-vol,mount-path=/app/data
 ```
