@@ -137,7 +137,7 @@ python scripts/verify_cloud_deploy.py https://lot-zero-1051797806634.us-central1
    [PASS] Recall notices dispatched.
 7. Exporting cryptographic audit bundle and verifying hash chain...
    -> Total Ledger Entries: 11
-   -> Top-Level Digest: ec5e863367e1ad1987ed17683a6e50921532db8561ef25b81f524c05ffa8cd5e
+   -> Top-Level Digest: 46ff458ca5846d73cbfb44b1a80aa3749d2d7e098776bce08d3979eb37190921
    [PASS] Cryptographic audit hash chain 100% verified.
 
 ================================================================
@@ -156,7 +156,7 @@ python scripts/verify_cloud_deploy.py https://lot-zero-1051797806634.us-central1
  
 URL:     https://lot-zero-1051797806634.us-central1.run.app
 Ingress: all
-Traffic: 100% LATEST (currently lot-zero-00008-h9d)
+Traffic: 100% LATEST (currently lot-zero-00009-kpg)
 Scaling: Auto (Min: 0, Max: 1)
 
 Image: us-central1-docker.pkg.dev/project-b2c3348e-d718-4255-be2/cloud-run-source-deploy/lot-zero@sha256:6ef8e74e47cf7a1a0c8b3ebf2bf05ef343274291f03f7e6f85fa3240e94bb10b
