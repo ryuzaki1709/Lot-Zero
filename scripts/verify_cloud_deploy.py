@@ -67,9 +67,9 @@ def verify_cloud_deployment():
     status, data = http_req("POST", "/api/evaluation/simulate-signal", {"X-API-Key": KEY_COORD})
     assert status == 200, f"Simulate signal failed: {data}"
     model_val = data["projection"]["runtime"]["model"]["value"]
-    print(f"   [PASS] Gemini Model: {model_val}")
-    assert "Replay" not in model_val, f"Live Vertex AI Gemini call failed — model tag contains 'Replay': {model_val}"
-    assert "(Vertex AI Live)" in model_val or "(Google GenAI Live)" in model_val, f"Expected live execution tag, got {model_val}"
+    assert "Replay" not in model_val, f"Live Gemini 3.5 call failed — model tag contains 'Replay': {model_val}"
+    assert model_val.startswith("gemini-3.5"), f"Expected gemini-3.5 model, got {model_val}"
+    assert "(Vertex AI Live)" in model_val or "(Gemini API Live)" in model_val, f"Expected live execution tag, got {model_val}"
 
     # 4. Wrong-role refusal: Recall Coordinator attempts QA quarantine approval
     print("4. Testing Separation of Duties (wrong-role denial)...")

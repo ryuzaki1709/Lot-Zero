@@ -38,8 +38,8 @@ def analyze_safety_signal(
         try:
             from google import genai
 
-            project = os.getenv("GOOGLE_CLOUD_PROJECT")
-            location = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
+            project = os.getenv("GOOGLE_CLOUD_PROJECT", "project-b2c3348e-d718-4255-be2")
+            location = os.getenv("GOOGLE_CLOUD_LOCATION", "global")
             client = genai.Client(vertexai=True, project=project, location=location)
             prompt = (
                 "You are an industrial safety recall specialist. Analyze this laboratory notification and extract: "
@@ -48,19 +48,17 @@ def analyze_safety_signal(
                 "3. Character start and end offsets for each claim in the text.\n\n"
                 f"TEXT:\n{raw_notice_text}"
             )
-            # Try available Vertex AI publisher models in us-central1
-            vertex_model = "gemini-2.5-flash"
             response = client.models.generate_content(
-                model=vertex_model,
+                model="gemini-3.5-flash",
                 contents=prompt,
             )
-            model_tag = f"{vertex_model} (Vertex AI Live)"
-            print(f"[Gemini Agent] Successfully executed live on Vertex AI with model '{vertex_model}'", flush=True)
+            model_tag = "gemini-3.5-flash (Vertex AI Live)"
+            print(f"[Gemini Agent] Successfully executed live on Vertex AI (location={location}, model=gemini-3.5-flash)", flush=True)
         except Exception as e:
             import traceback
             print(f"[Gemini Agent] Vertex AI Exception: {type(e).__name__}: {e}", flush=True)
             traceback.print_exc()
-            model_tag = "gemini-2.5-flash (Google GenAI Replay)"
+            model_tag = "gemini-3.5-flash (Google GenAI Replay)"
     elif gemini_key:
         try:
             from google import genai

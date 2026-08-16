@@ -96,7 +96,7 @@ gcloud run deploy lot-zero \
     --max-instances=1 \
     --memory=512Mi \
     --cpu=1 \
-    --set-env-vars="LOT_ZERO_DB_PATH=/app/data/lot_zero.db,LOT_ZERO_TENANT_ID=EVAL-TENANT-01,GOOGLE_GENAI_USE_VERTEXAI=true,GOOGLE_CLOUD_PROJECT=project-b2c3348e-d718-4255-be2,GOOGLE_CLOUD_LOCATION=us-central1" \
+    --set-env-vars="LOT_ZERO_DB_PATH=/app/data/lot_zero.db,LOT_ZERO_TENANT_ID=EVAL-TENANT-01,GOOGLE_GENAI_USE_VERTEXAI=true,GOOGLE_CLOUD_PROJECT=project-b2c3348e-d718-4255-be2,GOOGLE_CLOUD_LOCATION=global" \
     --set-secrets="LOT_ZERO_SSE_SECRET=lot-zero-sse-secret:latest" \
     --add-volume=name=event-store-vol,type=cloud-storage,bucket=lot-zero-events-${PROJECT_ID} \
     --add-volume-mount=volume=event-store-vol,mount-path=/app/data
