@@ -227,6 +227,32 @@ export function GenealogyGraph({ genealogy, metrics, phase, isQaApproved }) {
             </div>
           )}
         </div>
+
+        {/* Unresolved Genealogy Boundaries Notice */}
+        {genealogy.unresolved_edges && genealogy.unresolved_edges.length > 0 && (
+          <div
+            style={{
+              marginTop: '16px',
+              padding: '12px 16px',
+              background: 'rgba(234, 179, 8, 0.08)',
+              border: '1px solid rgba(234, 179, 8, 0.25)',
+              borderRadius: 'var(--radius-md)',
+              fontSize: '13px',
+              color: 'var(--status-warning-text)',
+            }}
+          >
+            <div style={{ fontWeight: 600, marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span className="status-dot status-dot-warning" />
+              Traceability boundary notice (Incomplete downstream path)
+            </div>
+            {genealogy.unresolved_edges.map((e) => (
+              <div key={e.edge_id} style={{ color: 'var(--text-secondary)', marginTop: '4px' }}>
+                Edge <span className="mono-val">{e.edge_id}</span> ({e.source_id} &rarr;{' '}
+                <span className="mono-val">{e.target_id}</span>) terminates at an unmapped transform node without finished product records. This boundary is recorded in the cryptographic audit trail and does not alter the verified hold scope.
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </section>
   );

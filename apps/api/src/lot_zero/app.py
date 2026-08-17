@@ -7,7 +7,7 @@ import hashlib
 import json
 import os
 import re
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import Annotated, Any, Literal
@@ -22,6 +22,10 @@ from .adapters.demo_sink import DemoNotificationSink
 from .adapters.sqlite_repository import SqliteIncidentRepository
 from .auth import create_sse_token, get_current_principal, get_principal_for_key, require_role, verify_sse_token
 from .domain.authority import Principal
+from .domain.genealogy import GenealogyEdge, InventoryRecord, ShipmentRecord
+from .domain.recall import FinishedLot, compute_impact
+from .domain.scope import RecallScope, ScopePredicate
+from .fixtures.loader import load_fixture
 from .domain.commands import (
     ApproveClosureCommand,
     ApproveContainmentCommand,
@@ -336,7 +340,106 @@ async def simulate_signal(principal: Principal = Depends(get_current_principal))
             tenant_id=TENANT_ID,
         )
 
-        # 2. Propose scope through domain authority
+        # 2. Derive domain inputs from authored fixture and execute deterministic graph traversal
+        fixture = load_fixture("evaluation-tenant-v1")
+        products = tuple(
+            FinishedLot(
+                record_id=lot.lot_id,
+                tenant_id=TENANT_ID,
+                case_id=current_state.case.case_id,
+                product_id=lot.product_id,
+                lot_id=lot.lot_id,
+                quantity=Decimal(str(lot.quantity)),
+                produced_on=date(2026, 8, 14),
+            )
+            for lot in fixture.operations.affected_finished_lots
+        ) + (
+            FinishedLot(
+                record_id=fixture.operations.adjacent_unaffected_batch.lot_id,
+                tenant_id=TENANT_ID,
+                case_id=current_state.case.case_id,
+                product_id=fixture.operations.adjacent_unaffected_batch.product_id,
+                lot_id=fixture.operations.adjacent_unaffected_batch.lot_id,
+                quantity=Decimal(str(fixture.operations.adjacent_unaffected_batch.quantity)),
+                produced_on=date(2026, 8, 14),
+            ),
+        )
+        edges = tuple(
+            GenealogyEdge(
+                edge_id=f"EDGE-{lot.lot_id}",
+                tenant_id=TENANT_ID,
+                case_id=current_state.case.case_id,
+                source_id=lot.ingredient_lot,
+                target_id=lot.lot_id,
+            )
+            for lot in fixture.operations.affected_finished_lots
+        ) + tuple(
+            GenealogyEdge(
+                edge_id=edge.edge_id,
+                tenant_id=TENANT_ID,
+                case_id=current_state.case.case_id,
+                source_id=edge.source_id,
+                target_id=edge.target_id,
+            )
+            for edge in fixture.operations.broken_genealogy_edges
+        )
+        inventory = tuple(
+            InventoryRecord(
+                record_id=f"INV-{lot.lot_id}",
+                tenant_id=TENANT_ID,
+                case_id=current_state.case.case_id,
+                lot_id=lot.lot_id,
+                quantity=Decimal(str(lot.quantity)),
+            )
+            for lot in fixture.operations.affected_finished_lots
+        ) + (
+            InventoryRecord(
+                record_id="INV-FP-100-ADJ",
+                tenant_id=TENANT_ID,
+                case_id=current_state.case.case_id,
+                lot_id="FP-100-ADJ",
+                quantity=Decimal(str(fixture.operations.adjacent_unaffected_batch.quantity)),
+            ),
+        )
+        shipments = (
+            ShipmentRecord(
+                record_id="SHIP-FP-100-L240814-A",
+                tenant_id=TENANT_ID,
+                case_id=current_state.case.case_id,
+                lot_id="FP-100-L240814-A",
+                quantity=Decimal(str(fixture.operations.shipped_quantity)),
+            ),
+        )
+        scope = RecallScope(
+            scope_id="SCOPE-EVAL-01",
+            tenant_id=TENANT_ID,
+            case_id=current_state.case.case_id,
+            evidence_ids=(signal_res.source_id,),
+            predicates=(
+                ScopePredicate(
+                    predicate_id="PRED-INGREDIENT-01",
+                    kind="ingredient_lot",
+                    expected_value=signal_res.ingredient_lot,
+                ),
+                ScopePredicate(
+                    predicate_id="PRED-PRODUCT-01",
+                    kind="product_id",
+                    expected_value="FP-100",
+                ),
+                ScopePredicate(
+                    predicate_id="PRED-DATE-01",
+                    kind="produced_on",
+                    start_date=date(2026, 8, 14),
+                    end_date=date(2026, 8, 14),
+                ),
+            ),
+        )
+
+        impact = compute_impact(scope, products, edges, inventory, shipments)
+        affected_record_ids = impact.affected_finished_lot_ids
+        affected_quantity = impact.affected_inventory_quantity
+
+        # 3. Propose scope through domain authority
         scope_cmd = ProposeScopeCommand(
             kind="propose_scope",
             command_id=f"CMD-SCOPE-{current_state.case.case_version + 1}",
@@ -346,7 +449,7 @@ async def simulate_signal(principal: Principal = Depends(get_current_principal))
             case_version=current_state.case.case_version,
             scope_id="SCOPE-EVAL-01",
             scope_version=1,
-            evidence_record_ids=("EVID-01", "EVID-02", "EVID-03"),
+            evidence_record_ids=tuple(s.evidence_id for s in signal_res.spans) or ("EVID-01", "EVID-02", "EVID-03"),
             policy_version="EVAL-HOLD-01",
         )
         res1 = execute_command(current_state, scope_cmd, principal, occurred_at=now)
@@ -360,14 +463,14 @@ async def simulate_signal(principal: Principal = Depends(get_current_principal))
             case_version=current_state.case.case_version,
             scope_version=1,
             status="proposed",
-            affected_record_ids=("FP-100-L240814-A", "FP-100-L240814-B"),
-            evidence_record_ids=("EVID-01", "EVID-02", "EVID-03"),
-            affected_quantity=Decimal("200"),
+            affected_record_ids=affected_record_ids,
+            evidence_record_ids=tuple(s.evidence_id for s in signal_res.spans) or ("EVID-01", "EVID-02", "EVID-03"),
+            affected_quantity=affected_quantity,
             created_at=now,
         )
         current_state = res1.state.model_copy(update={"scopes": (affected_scope,)})
 
-        # 3. Request provisional hold with 30-minute server-side TTL
+        # 4. Request provisional hold with 30-minute server-side TTL
         hold_cmd = RequestContainmentCommand(
             kind="request_containment",
             command_id=f"CMD-HOLD-{current_state.case.case_version + 1}",
@@ -379,7 +482,7 @@ async def simulate_signal(principal: Principal = Depends(get_current_principal))
             scope_version=1,
             policy_version="EVAL-HOLD-01",
             action_type="provisional_hold",
-            target_record_ids=("FP-100-L240814-A", "FP-100-L240814-B"),
+            target_record_ids=affected_record_ids,
         )
         res2 = execute_command(current_state, hold_cmd, principal, occurred_at=now)
         if not res2.decision.allowed:
@@ -395,8 +498,8 @@ async def simulate_signal(principal: Principal = Depends(get_current_principal))
             scope_version=1,
             action_type="provisional_hold",
             status="planned",
-            target_record_ids=("FP-100-L240814-A", "FP-100-L240814-B"),
-            quantity=Decimal("200"),
+            target_record_ids=affected_record_ids,
+            quantity=affected_quantity,
             policy_version="EVAL-HOLD-01",
             requested_at=now,
             hold_expires_at=ttl_expires_at,
@@ -412,9 +515,9 @@ async def simulate_signal(principal: Principal = Depends(get_current_principal))
             case_version=0,
             scope_id="SCOPE-EVAL-01",
             scope_version=1,
-            affected_record_ids=("FP-100-L240814-A", "FP-100-L240814-B"),
-            affected_quantity=Decimal("200"),
-            evidence_record_ids=("EVID-01", "EVID-02", "EVID-03"),
+            affected_record_ids=affected_record_ids,
+            affected_quantity=affected_quantity,
+            evidence_record_ids=tuple(s.evidence_id for s in signal_res.spans) or ("EVID-01", "EVID-02", "EVID-03"),
             occurred_at=now,
         )
         ev2 = ContainmentRequestedEvent(
@@ -427,7 +530,7 @@ async def simulate_signal(principal: Principal = Depends(get_current_principal))
             scope_version=1,
             action_id="ACT-HOLD-01",
             policy_version="EVAL-HOLD-01",
-            target_record_ids=("FP-100-L240814-A", "FP-100-L240814-B"),
+            target_record_ids=affected_record_ids,
             occurred_at=now,
         )
         await repository.append(current_state.case.case_id, expected_version=0, events=[ev1, ev2], tenant_id=principal.tenant_id)

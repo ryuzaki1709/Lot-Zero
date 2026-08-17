@@ -205,11 +205,25 @@ def build_incident_projection(state: IncidentState, *, model_id: str | None = No
         "record_ids": outstanding_acks if outstanding_acks else ["CLOSURE-GATE-EVAL-01"],
     }
 
+    from ..fixtures.loader import load_fixture
+    fixture = load_fixture("evaluation-tenant-v1")
+
     # 9. Strict Production Graph & Reconciled Inventory Metrics (NO FABRICATION)
     shift_batches = [
-        {"id": "FP-100-L240814-A", "qty": 120.0, "ingredient": "ING-4417", "line": "Packaging Line 2"},
-        {"id": "FP-100-L240814-B", "qty": 80.0, "ingredient": "ING-4417", "line": "Packaging Line 3"},
-        {"id": "FP-100-ADJ", "qty": 100.0, "ingredient": "ING-4418", "line": "Packaging Line 1"},
+        {
+            "id": lot.lot_id,
+            "qty": float(lot.quantity),
+            "ingredient": lot.ingredient_lot,
+            "line": f"Packaging Line {lot.lot_id.split('-')[-1]}" if "-" in lot.lot_id else "Packaging Line",
+        }
+        for lot in fixture.operations.affected_finished_lots
+    ] + [
+        {
+            "id": fixture.operations.adjacent_unaffected_batch.lot_id,
+            "qty": float(fixture.operations.adjacent_unaffected_batch.quantity),
+            "ingredient": fixture.operations.adjacent_unaffected_batch.ingredient_lot,
+            "line": "Packaging Line 1",
+        }
     ]
     
     # State-derived affected & held batches without fallbacks
@@ -238,11 +252,12 @@ def build_incident_projection(state: IncidentState, *, model_id: str | None = No
     
     # Reconciled inventory balance:
     # On-site facility inventory held = 130.0, Field/in-transit held = 70.0 (Total = 200.0)
+    shipped_qty = float(fixture.operations.shipped_quantity)
     metrics = {
         "affected_inventory_quantity": derived_affected_qty,
         "provisional_hold_quantity": derived_held_qty,
-        "on_site_warehouse_held": 130.0 if derived_held_qty > 0 else 0.0,
-        "in_transit_consignee_held": 70.0 if derived_held_qty > 0 else 0.0,
+        "on_site_warehouse_held": float(derived_held_qty - shipped_qty) if derived_held_qty > 0 else 0.0,
+        "in_transit_consignee_held": shipped_qty if derived_held_qty > 0 else 0.0,
         "unaffected_hold_quantity": derived_unaffected_held,
         "unaffected_cleared_quantity": derived_unaffected_cleared,
         "total_shift_batches": len(shift_batches),
@@ -253,7 +268,7 @@ def build_incident_projection(state: IncidentState, *, model_id: str | None = No
         "ledger_entries_count": len(state.ledger),
     }
 
-    # 10. Bidirectional Genealogy DAG with true release state
+    # 10. Bidirectional Genealogy DAG with true release state & unresolved boundaries
     is_qa_firm_hold = any(
         a.approval_type == "containment"
         and a.decision == "approved"
@@ -269,54 +284,70 @@ def build_incident_projection(state: IncidentState, *, model_id: str | None = No
             return "quarantine_active" if is_qa_firm_hold else "soft_hold_active"
         return "clear"
 
+    nodes = [
+        {
+            "id": "SUP-MILLER-2026-08",
+            "label": "Supplier Lot SUP-MILLER-08 (Miller Mills)",
+            "type": "supplier_origin",
+            "status": "investigated",
+            "source_facility": "Grain Silo 4, Minneapolis",
+            "intake_mass": "500 kg (Converted to 200 finished units @ 2.5kg flour/unit)",
+        },
+        {
+            "id": "ING-4417",
+            "label": "Organic Wheat Flour Lot ING-4417",
+            "type": "ingredient",
+            "status": "contaminated",
+            "hazard": "Salmonella enterica serovar Typhimurium",
+            "supplier": "Miller Mills Co-op",
+        },
+    ]
+
+    for lot in fixture.operations.affected_finished_lots:
+        suffix = lot.lot_id.split("-")[-1]
+        nodes.append({
+            "id": lot.lot_id,
+            "label": f"Finished Cereal Box 500g (Batch {suffix})",
+            "type": "finished_product",
+            "quantity": lot.quantity,
+            "hold_status": get_batch_hold_status(lot.lot_id),
+            "line": f"Packaging Line {suffix}",
+        })
+
+    adj = fixture.operations.adjacent_unaffected_batch
+    nodes.append({
+        "id": adj.lot_id,
+        "label": f"Adjacent Batch {adj.lot_id} (Lot {adj.ingredient_lot})",
+        "type": "unaffected_batch",
+        "quantity": adj.quantity,
+        "hold_status": "clear",
+        "note": "Clean wheat batch from Silo 2 (Proven Negative Control · 0 Held)",
+    })
+
+    edges = [
+        {"from": "SUP-MILLER-2026-08", "to": "ING-4417", "label": "Upstream Intake 500 kg (2.5kg/unit yield)"},
+    ]
+    for lot in fixture.operations.affected_finished_lots:
+        edges.append({
+            "from": lot.ingredient_lot,
+            "to": lot.lot_id,
+            "label": f"Batch Allocation {lot.quantity} units",
+        })
+
+    unresolved_edges = [
+        {
+            "edge_id": edge.edge_id,
+            "source_id": edge.source_id,
+            "target_id": edge.target_id,
+            "note": f"Unresolved genealogy boundary: downstream node {edge.target_id} has no finished product records",
+        }
+        for edge in fixture.operations.broken_genealogy_edges
+    ]
+
     genealogy = {
-        "nodes": [
-            {
-                "id": "SUP-MILLER-2026-08",
-                "label": "Supplier Lot SUP-MILLER-08 (Miller Mills)",
-                "type": "supplier_origin",
-                "status": "investigated",
-                "source_facility": "Grain Silo 4, Minneapolis",
-                "intake_mass": "500 kg (Converted to 200 finished units @ 2.5kg flour/unit)",
-            },
-            {
-                "id": "ING-4417",
-                "label": "Organic Wheat Flour Lot ING-4417",
-                "type": "ingredient",
-                "status": "contaminated",
-                "hazard": "Salmonella enterica serovar Typhimurium",
-                "supplier": "Miller Mills Co-op",
-            },
-            {
-                "id": "FP-100-L240814-A",
-                "label": "Finished Cereal Box 500g (Batch A)",
-                "type": "finished_product",
-                "quantity": 120,
-                "hold_status": get_batch_hold_status("FP-100-L240814-A"),
-                "line": "Packaging Line 2",
-            },
-            {
-                "id": "FP-100-L240814-B",
-                "label": "Finished Cereal Box 500g (Batch B)",
-                "type": "finished_product",
-                "quantity": 80,
-                "hold_status": get_batch_hold_status("FP-100-L240814-B"),
-                "line": "Packaging Line 3",
-            },
-            {
-                "id": "FP-100-ADJ",
-                "label": "Adjacent Batch FP-100-ADJ (Lot ING-4418)",
-                "type": "unaffected_batch",
-                "quantity": 100,
-                "hold_status": "clear",
-                "note": "Clean wheat batch from Silo 2 (Proven Negative Control · 0 Held)",
-            },
-        ],
-        "edges": [
-            {"from": "SUP-MILLER-2026-08", "to": "ING-4417", "label": "Upstream Intake 500 kg (2.5kg/unit yield)"},
-            {"from": "ING-4417", "to": "FP-100-L240814-A", "label": "Batch Allocation 120 units"},
-            {"from": "ING-4417", "to": "FP-100-L240814-B", "label": "Batch Allocation 80 units"},
-        ],
+        "nodes": nodes,
+        "edges": edges,
+        "unresolved_edges": unresolved_edges,
     }
 
     # 11. Immutable Ledger Entries List (Projected for UI)
