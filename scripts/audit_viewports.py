@@ -83,19 +83,19 @@ with sync_playwright() as p:
         page.locator('button:has-text("Approve Firm Quarantine")').click()
         page.wait_for_timeout(600)
         
-        # If 390, capture Modal 1 (Release Rail) and Modal 2 (Docs)
+        # If 390, capture Architecture Docs & Reset Modal
         if name == '390':
-            print('Capturing Modal: Dual-Signature Release Rail (Gate 4)...')
-            page.locator('button:has-text("Sign Step 1 (QA Lead)")').click()
-            page.wait_for_timeout(400)
-            page.screenshot(path=f'{screenshots_dir}/390_modal_release.png')
-            page.keyboard.press('Escape')
-            page.wait_for_timeout(400)
-            
             print('Capturing Modal: Architecture Docs...')
             page.locator('button[title*="Architecture"]').click()
             page.wait_for_timeout(400)
             page.screenshot(path=f'{screenshots_dir}/390_modal_docs.png')
+            page.keyboard.press('Escape')
+            page.wait_for_timeout(400)
+
+            print('Capturing Modal: Reset State Confirmation...')
+            page.locator('button[title*="Reset to clean baseline"]').click()
+            page.wait_for_timeout(400)
+            page.screenshot(path=f'{screenshots_dir}/390_modal_reset.png')
             page.keyboard.press('Escape')
             page.wait_for_timeout(400)
         
