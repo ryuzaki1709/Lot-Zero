@@ -76,7 +76,7 @@ export function Header({
       {/* Sticky top navigation */}
       <div className="topbar">
         <div className="topbar-inner">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0 }}>
+          <div className="topbar-brand" style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0 }}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', fontSize: '15px', fontWeight: 700, letterSpacing: '-0.02em' }}>
               <span style={{ width: '8px', height: '8px', borderRadius: '2px', background: 'var(--accent-primary)', display: 'inline-block' }} />
               Lot Zero
@@ -103,25 +103,28 @@ export function Header({
               <option value="key-agent-svc-01">Agent Service</option>
             </select>
 
-            <button className="btn btn-ghost" onClick={onExportAudit} disabled={loading} title="Download hash-chained audit bundle">
-              <Download size={14} />
-              <span className="hide-mobile">Export</span>
-            </button>
-            <button className="btn btn-ghost" onClick={onOpenHowItWorks} title="Architecture notes">
-              <BookOpen size={14} />
-              <span className="hide-mobile">Docs</span>
-            </button>
-            <button className="btn btn-ghost" onClick={() => setShowResetConfirm(true)} disabled={loading} title="Reset to clean baseline">
-              <RefreshCw size={14} />
-              <span>Reset State</span>
-            </button>
             <button
               className={`btn btn-primary ${!hasSignal && !loading ? 'btn-pulse' : ''}`}
               onClick={onSimulateSignal}
               disabled={loading}
             >
               <Sparkles size={14} />
-              Simulate signal
+              <span>Simulate signal</span>
+            </button>
+
+            <button className="btn btn-ghost" onClick={() => setShowResetConfirm(true)} disabled={loading} title="Reset to clean baseline">
+              <RefreshCw size={14} />
+              <span>Reset State</span>
+            </button>
+
+            <button className="btn btn-ghost" onClick={onExportAudit} disabled={loading} title="Download hash-chained audit bundle">
+              <Download size={14} />
+              <span className="hide-mobile">Export</span>
+            </button>
+
+            <button className="btn btn-ghost" onClick={onOpenHowItWorks} title="Architecture notes">
+              <BookOpen size={14} />
+              <span className="hide-mobile">Docs</span>
             </button>
           </div>
         </div>
