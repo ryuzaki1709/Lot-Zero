@@ -6,6 +6,7 @@ import re
 from typing import Literal
 
 from .commands import (
+    AdvancePhaseCommand,
     ApprovalCommand,
     ApproveClosureCommand,
     ApproveContainmentCommand,
@@ -388,4 +389,22 @@ def authorize(
         if not _has_role(principal, "recall_coordinator"):
             return _deny("ROLE_NOT_AUTHORIZED", "only a coordinator may request closure review")
         return _allow("closure review request is within coordinator authority")
+    if isinstance(command, AdvancePhaseCommand):
+        target = command.target_phase
+        if target == "scope_review":
+            if not _has_role(principal, "recall_coordinator"):
+                return _deny("ROLE_NOT_AUTHORIZED", "Advancing to scope_review requires recall_coordinator role")
+        elif target in ("provisional_containment", "action_review"):
+            if not _has_role(principal, "qa") and not _has_role(principal, "recall_coordinator"):
+                return _deny("ROLE_NOT_AUTHORIZED", f"Advancing to {target} requires qa or recall_coordinator role")
+        elif target == "ack_monitoring":
+            if not _has_role(principal, "customer_operations"):
+                return _deny("ROLE_NOT_AUTHORIZED", "Advancing to ack_monitoring requires customer_operations role")
+        elif target == "effectiveness_check":
+            if not _has_role(principal, "customer_operations") and not _has_role(principal, "closure_authority"):
+                return _deny("ROLE_NOT_AUTHORIZED", "Advancing to effectiveness_check requires customer_operations or closure_authority role")
+        elif target == "closed":
+            if not _has_role(principal, "closure_authority"):
+                return _deny("ROLE_NOT_AUTHORIZED", "Advancing to closed requires closure_authority role")
+        return _allow(f"Authorized phase transition to {target}")
     return _deny("COMMAND_NOT_SUPPORTED", "command is outside the closed authority boundary")

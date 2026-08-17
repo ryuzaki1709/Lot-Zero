@@ -9,8 +9,9 @@ from typing import Literal
 
 from ..ports.actions import ActionAdapter, ActionReceipt
 from ..ports.repositories import IncidentRepository
-from .authority import AuthorizationDecision, Principal, authorize
+from .authority import AuthorizationDecision, Principal, _deny, authorize
 from .commands import (
+    AdvancePhaseCommand,
     ApproveClosureCommand,
     ApproveContainmentCommand,
     ApproveNotificationCommand,
@@ -33,7 +34,9 @@ from .events import (
     ContainmentRequestedEvent,
     NotificationRequestedEvent,
     ScopeProposedEvent,
+    TransitionEvent,
 )
+from .transitions import _ALLOWED_PRIMARY_TARGETS
 from .identifiers import ActionIntent, action_key
 from .models import ApprovalDecision, ContainmentAction, IncidentState
 from .reducer import apply_event
@@ -150,6 +153,28 @@ def execute_command(
             policy_version=command.policy_version,
             outstanding_acknowledgement_ids=command.outstanding_acknowledgement_ids,
             kind="closure_requested",
+            occurred_at=now,
+        )
+        events.append(event)
+
+    elif isinstance(command, AdvancePhaseCommand):
+        expected_target = _ALLOWED_PRIMARY_TARGETS.get(state.case.phase)
+        if command.target_phase != expected_target:
+            return CommandExecutionResult(
+                state,
+                (),
+                _deny(
+                    "ILLEGAL_PHASE_TRANSITION",
+                    f"Cannot advance phase from '{state.case.phase}' to '{command.target_phase}'. Allowed target is '{expected_target}'.",
+                ),
+            )
+        event = TransitionEvent(
+            event_id=f"EVT-{command.command_id}",
+            tenant_id=command.tenant_id,
+            case_id=command.case_id,
+            case_version=command.case_version,
+            kind="advance",
+            target_phase=command.target_phase,
             occurred_at=now,
         )
         events.append(event)

@@ -215,6 +215,20 @@ def apply_event(state: IncidentState, event: object) -> IncidentState:
         )
 
     if isinstance(event, ContainmentRequestedEvent):
+        action = ContainmentAction(
+            action_id=event.action_id,
+            tenant_id=event.tenant_id,
+            case_id=event.case_id,
+            scope_id=event.scope_id,
+            scope_version=event.scope_version,
+            action_type="provisional_hold",
+            status="planned",
+            target_record_ids=event.target_record_ids,
+            quantity=Decimal("200"),
+            policy_version=event.policy_version,
+            requested_at=event.occurred_at,
+        )
+        retained_actions = tuple(a for a in state.containment_actions if a.action_id != event.action_id)
         return _with_ledger_entry(
             state,
             now=event.occurred_at,
@@ -224,6 +238,7 @@ def apply_event(state: IncidentState, event: object) -> IncidentState:
             entry_type="CONTAINMENT_REQUESTED",
             record_ids=(event.action_id, *event.target_record_ids),
             payload_hash=canonical_sha256(event),
+            updates={"containment_actions": (*retained_actions, action)},
         )
 
     if isinstance(event, NotificationRequestedEvent):

@@ -27,6 +27,7 @@ from .domain.recall import FinishedLot, compute_impact
 from .domain.scope import RecallScope, ScopePredicate
 from .fixtures.loader import load_fixture
 from .domain.commands import (
+    AdvancePhaseCommand,
     ApproveClosureCommand,
     ApproveContainmentCommand,
     ApproveNotificationCommand,
@@ -449,26 +450,29 @@ async def simulate_signal(principal: Principal = Depends(get_current_principal))
             case_version=current_state.case.case_version,
             scope_id="SCOPE-EVAL-01",
             scope_version=1,
+            affected_record_ids=affected_record_ids,
+            affected_quantity=affected_quantity,
             evidence_record_ids=tuple(s.evidence_id for s in signal_res.spans) or ("EVID-01", "EVID-02", "EVID-03"),
             policy_version="EVAL-HOLD-01",
         )
         res1 = execute_command(current_state, scope_cmd, principal, occurred_at=now)
         if not res1.decision.allowed:
             raise HTTPException(status_code=400, detail=res1.decision.explanation)
+        current_state = res1.state
 
-        affected_scope = AffectedScope(
-            scope_id="SCOPE-EVAL-01",
+        # Advance phase: signal_received -> scope_review
+        adv_scope_cmd = AdvancePhaseCommand(
+            command_id=f"CMD-ADV-SCOPE-{int(now.timestamp())}",
             tenant_id=TENANT_ID,
             case_id=current_state.case.case_id,
+            actor_id=principal.principal_id,
             case_version=current_state.case.case_version,
-            scope_version=1,
-            status="proposed",
-            affected_record_ids=affected_record_ids,
-            evidence_record_ids=tuple(s.evidence_id for s in signal_res.spans) or ("EVID-01", "EVID-02", "EVID-03"),
-            affected_quantity=affected_quantity,
-            created_at=now,
+            target_phase="scope_review",
         )
-        current_state = res1.state.model_copy(update={"scopes": (affected_scope,)})
+        res_adv_scope = execute_command(current_state, adv_scope_cmd, principal, occurred_at=now)
+        if not res_adv_scope.decision.allowed:
+            raise HTTPException(status_code=400, detail=res_adv_scope.decision.explanation)
+        current_state = res_adv_scope.state
 
         # 4. Request provisional hold with 30-minute server-side TTL
         hold_cmd = RequestContainmentCommand(
@@ -487,53 +491,29 @@ async def simulate_signal(principal: Principal = Depends(get_current_principal))
         res2 = execute_command(current_state, hold_cmd, principal, occurred_at=now)
         if not res2.decision.allowed:
             raise HTTPException(status_code=400, detail=res2.decision.explanation)
+        current_state = res2.state
 
-        # Set hold_expires_at = now + 30m on the containment action
-        ttl_expires_at = now + timedelta(minutes=30)
-        action = ContainmentAction(
-            action_id=f"ACT-HOLD-01",
-            tenant_id=TENANT_ID,
-            case_id=current_state.case.case_id,
-            scope_id="SCOPE-EVAL-01",
-            scope_version=1,
-            action_type="provisional_hold",
-            status="planned",
-            target_record_ids=affected_record_ids,
-            quantity=affected_quantity,
-            policy_version="EVAL-HOLD-01",
-            requested_at=now,
-            hold_expires_at=ttl_expires_at,
-        )
-        current_state = res2.state.model_copy(update={"containment_actions": (action,)})
-
-        # Persist event records to SQLite event store
-        ev1 = ScopeProposedEvent(
-            event_id=f"EVT-SCOPE-{int(now.timestamp())}",
+        # Advance phase: scope_review -> provisional_containment
+        adv_hold_cmd = AdvancePhaseCommand(
+            command_id=f"CMD-ADV-HOLD-{int(now.timestamp())}",
             tenant_id=TENANT_ID,
             case_id=current_state.case.case_id,
             actor_id=principal.principal_id,
-            case_version=0,
-            scope_id="SCOPE-EVAL-01",
-            scope_version=1,
-            affected_record_ids=affected_record_ids,
-            affected_quantity=affected_quantity,
-            evidence_record_ids=tuple(s.evidence_id for s in signal_res.spans) or ("EVID-01", "EVID-02", "EVID-03"),
-            occurred_at=now,
+            case_version=current_state.case.case_version,
+            target_phase="provisional_containment",
         )
-        ev2 = ContainmentRequestedEvent(
-            event_id=f"EVT-HOLD-{int(now.timestamp())}",
-            tenant_id=TENANT_ID,
-            case_id=current_state.case.case_id,
-            actor_id=principal.principal_id,
-            case_version=1,
-            scope_id="SCOPE-EVAL-01",
-            scope_version=1,
-            action_id="ACT-HOLD-01",
-            policy_version="EVAL-HOLD-01",
-            target_record_ids=affected_record_ids,
-            occurred_at=now,
+        res_adv_hold = execute_command(current_state, adv_hold_cmd, principal, occurred_at=now)
+        if not res_adv_hold.decision.allowed:
+            raise HTTPException(status_code=400, detail=res_adv_hold.decision.explanation)
+        current_state = res_adv_hold.state
+
+        all_signal_events = [*res1.events, *res_adv_scope.events, *res2.events, *res_adv_hold.events]
+        await repository.append(
+            current_state.case.case_id,
+            expected_version=0,
+            events=all_signal_events,
+            tenant_id=principal.tenant_id,
         )
-        await repository.append(current_state.case.case_id, expected_version=0, events=[ev1, ev2], tenant_id=principal.tenant_id)
 
         await broadcast_state(current_state)
         return {
@@ -643,7 +623,20 @@ async def approve_containment(
         )
         current_state = res3.state.model_copy(update={"notification_packets": (notif_packet,)})
 
-        all_events = [*res1.events, *res2.events, *res3.events] if 'res1' in locals() else [*res2.events, *res3.events]
+        # Advance: provisional_containment -> action_review
+        adv_action_cmd = AdvancePhaseCommand(
+            command_id=f"CMD-ADV-ACTION-{int(now.timestamp())}",
+            tenant_id=TENANT_ID,
+            case_id=current_state.case.case_id,
+            actor_id=principal.principal_id,
+            case_version=current_state.case.case_version,
+            target_phase="action_review",
+        )
+        res_adv_action = execute_command(current_state, adv_action_cmd, principal, occurred_at=now)
+        if res_adv_action.decision.allowed:
+            current_state = res_adv_action.state
+
+        all_events = [*res1.events, *res2.events, *res3.events, *res_adv_action.events] if "res1" in locals() else [*res2.events, *res3.events, *res_adv_action.events]
         if all_events:
             await repository.append(
                 current_state.case.case_id,
@@ -721,6 +714,21 @@ async def dispatch_outbox(principal: Principal = Depends(get_current_principal))
             current_state = res_ack.state
             all_ack_events.extend(res_ack.events)
 
+        # 3. Advance phase to ack_monitoring via domain command
+        adv_cmd = AdvancePhaseCommand(
+            command_id=f"CMD-ADV-ACK-{int(now.timestamp())}",
+            tenant_id=TENANT_ID,
+            case_id=current_state.case.case_id,
+            actor_id=principal.principal_id,
+            case_version=current_state.case.case_version,
+            target_phase="ack_monitoring",
+        )
+        res_adv = execute_command(current_state, adv_cmd, principal, occurred_at=now)
+        if not res_adv.decision.allowed:
+            raise HTTPException(status_code=400, detail=res_adv.decision.explanation)
+        current_state = res_adv.state
+        all_ack_events.extend(res_adv.events)
+
         if all_ack_events:
             await repository.append(
                 current_state.case.case_id,
@@ -728,9 +736,6 @@ async def dispatch_outbox(principal: Principal = Depends(get_current_principal))
                 events=all_ack_events,
                 tenant_id=principal.tenant_id,
             )
-
-        current_case = current_state.case.model_copy(update={"phase": "ack_monitoring"})
-        current_state = current_state.model_copy(update={"case": current_case})
 
         await broadcast_state(current_state)
         return {"status": "outbox_dispatched", "projection": build_incident_projection(current_state)}
@@ -781,11 +786,29 @@ async def resolve_ack(
             raise HTTPException(status_code=status_code, detail=res_ack.decision.explanation)
         current_state = res_ack.state
 
-        if res_ack.events:
+        events_to_append = list(res_ack.events)
+        all_verified = len(current_state.acknowledgements) >= 6 and all(
+            a.status == "verified" for a in current_state.acknowledgements
+        )
+        if all_verified and current_state.case.phase == "ack_monitoring":
+            adv_eff_cmd = AdvancePhaseCommand(
+                command_id=f"CMD-ADV-EFF-{int(now.timestamp())}",
+                tenant_id=TENANT_ID,
+                case_id=current_state.case.case_id,
+                actor_id=principal.principal_id,
+                case_version=current_state.case.case_version,
+                target_phase="effectiveness_check",
+            )
+            res_eff = execute_command(current_state, adv_eff_cmd, principal, occurred_at=now)
+            if res_eff.decision.allowed:
+                current_state = res_eff.state
+                events_to_append.extend(res_eff.events)
+
+        if events_to_append:
             await repository.append(
                 current_state.case.case_id,
-                expected_version=current_state.case.case_version - len(res_ack.events),
-                events=res_ack.events,
+                expected_version=current_state.case.case_version - len(events_to_append),
+                events=events_to_append,
                 tenant_id=principal.tenant_id,
             )
 
@@ -896,15 +919,43 @@ async def close_with_non_response(
         if not res.decision.allowed:
             status_code = 403 if "lacks" in res.decision.explanation.lower() or "role" in res.decision.explanation.lower() else 400
             raise HTTPException(status_code=status_code, detail=res.decision.explanation)
+        current_state = res.state
 
-        updated_case = res.state.case.model_copy(update={"phase": "closed", "updated_at": now})
-        current_state = res.state.model_copy(update={"case": updated_case, "updated_at": now})
+        adv_events = []
+        if current_state.case.phase == "ack_monitoring":
+            adv_eff_cmd = AdvancePhaseCommand(
+                command_id=f"CMD-ADV-EFF-NONRESP-{int(now.timestamp())}",
+                tenant_id=TENANT_ID,
+                case_id=current_state.case.case_id,
+                actor_id=principal.principal_id,
+                case_version=current_state.case.case_version,
+                target_phase="effectiveness_check",
+            )
+            res_eff = execute_command(current_state, adv_eff_cmd, principal, occurred_at=now)
+            if res_eff.decision.allowed:
+                current_state = res_eff.state
+                adv_events.extend(res_eff.events)
 
-        if res.events:
+        adv_close_cmd = AdvancePhaseCommand(
+            command_id=f"CMD-ADV-CLOSE-NONRESP-{int(now.timestamp())}",
+            tenant_id=TENANT_ID,
+            case_id=current_state.case.case_id,
+            actor_id=principal.principal_id,
+            case_version=current_state.case.case_version,
+            target_phase="closed",
+        )
+        res_close = execute_command(current_state, adv_close_cmd, principal, occurred_at=now)
+        if not res_close.decision.allowed:
+            raise HTTPException(status_code=400, detail=res_close.decision.explanation)
+        current_state = res_close.state
+        adv_events.extend(res_close.events)
+
+        all_close_events = [*res.events, *adv_events]
+        if all_close_events:
             await repository.append(
                 current_state.case.case_id,
-                expected_version=current_state.case.case_version - len(res.events),
-                events=res.events,
+                expected_version=current_state.case.case_version - len(all_close_events),
+                events=all_close_events,
                 tenant_id=principal.tenant_id,
             )
 
@@ -940,27 +991,27 @@ async def request_closure(principal: Principal = Depends(get_current_principal))
             outstanding_acknowledgement_ids=tuple(outstanding),
         )
         res1 = execute_command(current_state, close_req_cmd, coord_principal, occurred_at=now)
-        if res1.decision.allowed:
-            current_state = res1.state
+        state_after_req = res1.state if res1.decision.allowed else current_state
 
         # 2. Attempt final closure approval
         closure_principal = Principal(tenant_id=TENANT_ID, principal_id="CLOSURE-AUTH-01", roles=("closure_authority",))
         close_app_cmd = ApproveClosureCommand(
             kind="approve_closure",
-            command_id=f"CMD-CLOSE-APP-{current_state.case.case_version + 1}",
+            command_id=f"CMD-CLOSE-APP-{state_after_req.case.case_version + 1}",
             tenant_id=TENANT_ID,
-            case_id=current_state.case.case_id,
+            case_id=state_after_req.case.case_id,
             actor_id="RECALL-COORD-01",
-            case_version=current_state.case.case_version,
-            approval_id=f"APP-CLOSE-{current_state.case.case_version + 1}",
+            case_version=state_after_req.case.case_version,
+            approval_id=f"APP-CLOSE-{state_after_req.case.case_version + 1}",
             rationale="Requesting final incident closure following verified consignee containment.",
             closure_id="EVAL-CLOSE-01",
             policy_version="EVAL-CLOSE-01",
             effectiveness_evidence_ids=("EVID-01", "EVID-02"),
         )
-        res2 = execute_command(current_state, close_app_cmd, closure_principal, occurred_at=now)
+        res2 = execute_command(state_after_req, close_app_cmd, closure_principal, occurred_at=now)
 
         if not res2.decision.allowed:
+            # If closure is blocked, do not mutate persistent state
             return {
                 "status": "closure_blocked",
                 "reason": res2.decision.explanation,
@@ -970,8 +1021,30 @@ async def request_closure(principal: Principal = Depends(get_current_principal))
                 "projection": build_incident_projection(current_state),
             }
 
-        updated_case = res2.state.case.model_copy(update={"phase": "closed", "updated_at": now})
-        current_state = res2.state.model_copy(update={"case": updated_case, "updated_at": now})
+        current_state = res2.state
+
+        # 3. Advance phase to closed
+        adv_close_cmd = AdvancePhaseCommand(
+            command_id=f"CMD-ADV-CLOSE-{int(now.timestamp())}",
+            tenant_id=TENANT_ID,
+            case_id=current_state.case.case_id,
+            actor_id=closure_principal.principal_id,
+            case_version=current_state.case.case_version,
+            target_phase="closed",
+        )
+        res_close = execute_command(current_state, adv_close_cmd, closure_principal, occurred_at=now)
+        if not res_close.decision.allowed:
+            raise HTTPException(status_code=400, detail=res_close.decision.explanation)
+        current_state = res_close.state
+
+        all_close_events = [*res1.events, *res2.events, *res_close.events] if res1.decision.allowed else [*res2.events, *res_close.events]
+        if all_close_events:
+            await repository.append(
+                current_state.case.case_id,
+                expected_version=current_state.case.case_version - len(all_close_events),
+                events=all_close_events,
+                tenant_id=principal.tenant_id,
+            )
 
         await broadcast_state(current_state)
         return {

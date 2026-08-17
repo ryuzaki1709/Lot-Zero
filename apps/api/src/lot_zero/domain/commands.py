@@ -123,6 +123,15 @@ class ExecuteStandingPolicyCommand(CommandRecord):
     intent: ActionIntent
 
 
+from .transitions import PrimaryPhase
+
+
+class AdvancePhaseCommand(CommandRecord):
+    kind: Literal["advance_phase"] = "advance_phase"
+    target_phase: PrimaryPhase
+    rationale: str | None = None
+
+
 type CommandValue = Annotated[
     ProposeScopeCommand
     | RequestContainmentCommand
@@ -134,7 +143,8 @@ type CommandValue = Annotated[
     | ApproveNotificationCommand
     | ApproveClosureCommand
     | ApproveReleaseCommand
-    | ExecuteStandingPolicyCommand,
+    | ExecuteStandingPolicyCommand
+    | AdvancePhaseCommand,
     Field(discriminator="kind"),
 ]
 Command = TypeAdapter(CommandValue)
