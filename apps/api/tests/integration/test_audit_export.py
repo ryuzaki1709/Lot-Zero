@@ -74,6 +74,7 @@ async def test_audit_export_generation_and_verification():
             action_id="ACT-01",
             policy_version="POL-01",
             target_record_ids=("FP-01",),
+            quantity=Decimal("150"),
             occurred_at=NOW,
         )
         ev3 = ApprovalDecision(
@@ -154,6 +155,7 @@ async def test_audit_export_tamper_detection():
             action_id="ACT-01",
             policy_version="POL-01",
             target_record_ids=("FP-01",),
+            quantity=Decimal("100"),
             occurred_at=NOW,
         )
         await repo.append(case_id, expected_version=0, events=[ev1, ev2], tenant_id=tenant)

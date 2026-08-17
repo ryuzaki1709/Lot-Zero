@@ -384,6 +384,8 @@ async def simulate_signal(principal: Principal = Depends(get_current_principal))
             )
             for edge in fixture.operations.broken_genealogy_edges
         )
+        adj_batch = fixture.operations.adjacent_unaffected_batch
+        first_lot = fixture.operations.affected_finished_lots[0]
         inventory = tuple(
             InventoryRecord(
                 record_id=f"INV-{lot.lot_id}",
@@ -395,19 +397,19 @@ async def simulate_signal(principal: Principal = Depends(get_current_principal))
             for lot in fixture.operations.affected_finished_lots
         ) + (
             InventoryRecord(
-                record_id="INV-FP-100-ADJ",
+                record_id=f"INV-{adj_batch.lot_id}",
                 tenant_id=TENANT_ID,
                 case_id=current_state.case.case_id,
-                lot_id="FP-100-ADJ",
-                quantity=Decimal(str(fixture.operations.adjacent_unaffected_batch.quantity)),
+                lot_id=adj_batch.lot_id,
+                quantity=Decimal(str(adj_batch.quantity)),
             ),
         )
         shipments = (
             ShipmentRecord(
-                record_id="SHIP-FP-100-L240814-A",
+                record_id=f"SHIP-{first_lot.lot_id}",
                 tenant_id=TENANT_ID,
                 case_id=current_state.case.case_id,
-                lot_id="FP-100-L240814-A",
+                lot_id=first_lot.lot_id,
                 quantity=Decimal(str(fixture.operations.shipped_quantity)),
             ),
         )
@@ -454,6 +456,7 @@ async def simulate_signal(principal: Principal = Depends(get_current_principal))
             affected_quantity=affected_quantity,
             evidence_record_ids=tuple(s.evidence_id for s in signal_res.spans) or ("EVID-01", "EVID-02", "EVID-03"),
             policy_version="EVAL-HOLD-01",
+            ingredient_lot=signal_res.ingredient_lot,
         )
         res1 = execute_command(current_state, scope_cmd, principal, occurred_at=now)
         if not res1.decision.allowed:
@@ -474,40 +477,43 @@ async def simulate_signal(principal: Principal = Depends(get_current_principal))
             raise HTTPException(status_code=400, detail=res_adv_scope.decision.explanation)
         current_state = res_adv_scope.state
 
-        # 4. Request provisional hold with 30-minute server-side TTL
-        hold_cmd = RequestContainmentCommand(
-            kind="request_containment",
-            command_id=f"CMD-HOLD-{current_state.case.case_version + 1}",
-            tenant_id=TENANT_ID,
-            case_id=current_state.case.case_id,
-            actor_id=principal.principal_id,
-            case_version=current_state.case.case_version,
-            scope_id="SCOPE-EVAL-01",
-            scope_version=1,
-            policy_version="EVAL-HOLD-01",
-            action_type="provisional_hold",
-            target_record_ids=affected_record_ids,
-        )
-        res2 = execute_command(current_state, hold_cmd, principal, occurred_at=now)
-        if not res2.decision.allowed:
-            raise HTTPException(status_code=400, detail=res2.decision.explanation)
-        current_state = res2.state
+        all_signal_events = [*res1.events, *res_adv_scope.events]
+        if affected_record_ids:
+            # 4. Request provisional hold with 30-minute server-side TTL
+            hold_cmd = RequestContainmentCommand(
+                kind="request_containment",
+                command_id=f"CMD-HOLD-{current_state.case.case_version + 1}",
+                tenant_id=TENANT_ID,
+                case_id=current_state.case.case_id,
+                actor_id=principal.principal_id,
+                case_version=current_state.case.case_version,
+                scope_id="SCOPE-EVAL-01",
+                scope_version=1,
+                policy_version="EVAL-HOLD-01",
+                action_type="provisional_hold",
+                target_record_ids=affected_record_ids,
+                quantity=affected_quantity,
+            )
+            res2 = execute_command(current_state, hold_cmd, principal, occurred_at=now)
+            if not res2.decision.allowed:
+                raise HTTPException(status_code=400, detail=res2.decision.explanation)
+            current_state = res2.state
 
-        # Advance phase: scope_review -> provisional_containment
-        adv_hold_cmd = AdvancePhaseCommand(
-            command_id=f"CMD-ADV-HOLD-{int(now.timestamp())}",
-            tenant_id=TENANT_ID,
-            case_id=current_state.case.case_id,
-            actor_id=principal.principal_id,
-            case_version=current_state.case.case_version,
-            target_phase="provisional_containment",
-        )
-        res_adv_hold = execute_command(current_state, adv_hold_cmd, principal, occurred_at=now)
-        if not res_adv_hold.decision.allowed:
-            raise HTTPException(status_code=400, detail=res_adv_hold.decision.explanation)
-        current_state = res_adv_hold.state
+            # Advance phase: scope_review -> provisional_containment
+            adv_hold_cmd = AdvancePhaseCommand(
+                command_id=f"CMD-ADV-HOLD-{int(now.timestamp())}",
+                tenant_id=TENANT_ID,
+                case_id=current_state.case.case_id,
+                actor_id=principal.principal_id,
+                case_version=current_state.case.case_version,
+                target_phase="provisional_containment",
+            )
+            res_adv_hold = execute_command(current_state, adv_hold_cmd, principal, occurred_at=now)
+            if not res_adv_hold.decision.allowed:
+                raise HTTPException(status_code=400, detail=res_adv_hold.decision.explanation)
+            current_state = res_adv_hold.state
+            all_signal_events.extend([*res2.events, *res_adv_hold.events])
 
-        all_signal_events = [*res1.events, *res_adv_scope.events, *res2.events, *res_adv_hold.events]
         await repository.append(
             current_state.case.case_id,
             expected_version=0,
@@ -519,7 +525,11 @@ async def simulate_signal(principal: Principal = Depends(get_current_principal))
         return {
             "status": "signal_processed",
             "signal": signal_res,
-            "projection": build_incident_projection(current_state, model_id=signal_res.model_version),
+            "projection": build_incident_projection(
+                current_state,
+                model_id=signal_res.model_version,
+                ingredient_lot=signal_res.ingredient_lot,
+            ),
         }
 
 

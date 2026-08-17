@@ -29,19 +29,19 @@ def test_advance_phase_command_authorization_and_legality():
     )
     state = IncidentState(case=case, updated_at=now)
 
-    # 1. Illegal transition attempt (skipping scope_review directly to ack_monitoring)
+    # 1. Illegal transition attempt (skipping scope_review directly to provisional_containment)
     illegal_cmd = AdvancePhaseCommand(
         command_id="CMD-ADV-ILLEGAL-01",
         tenant_id=TENANT_ID,
         case_id=CASE_ID,
         actor_id="RECALL-COORD-01",
         case_version=0,
-        target_phase="ack_monitoring",
+        target_phase="provisional_containment",
     )
     coord_principal = Principal(tenant_id=TENANT_ID, principal_id="RECALL-COORD-01", roles=("recall_coordinator",))
     res_illegal = execute_command(state, illegal_cmd, coord_principal)
     assert not res_illegal.decision.allowed
-    assert res_illegal.decision.code in ("ILLEGAL_PHASE_TRANSITION", "ROLE_NOT_AUTHORIZED")
+    assert res_illegal.decision.code == "ILLEGAL_PHASE_TRANSITION"
 
     # 2. Unauthorized role attempt (customer_operations trying to advance to scope_review)
     ops_principal = Principal(tenant_id=TENANT_ID, principal_id="OPS-001", roles=("customer_operations",))

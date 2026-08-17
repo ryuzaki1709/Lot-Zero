@@ -33,8 +33,9 @@ class ScopeProposedEvent(EventRecord):
     scope_id: Identifier
     scope_version: NonNegativeVersion
     affected_record_ids: tuple[Identifier, ...] = ()
-    affected_quantity: NonNegativeQuantity = Decimal("0")
+    affected_quantity: NonNegativeQuantity
     evidence_record_ids: Annotated[tuple[Identifier, ...], Field(min_length=1)]
+    ingredient_lot: Identifier | None = None
 
 
 class ContainmentRequestedEvent(EventRecord):
@@ -44,6 +45,7 @@ class ContainmentRequestedEvent(EventRecord):
     action_id: Identifier
     policy_version: Identifier
     target_record_ids: Annotated[tuple[Identifier, ...], Field(min_length=1)]
+    quantity: NonNegativeQuantity
 
 
 class NotificationRequestedEvent(EventRecord):

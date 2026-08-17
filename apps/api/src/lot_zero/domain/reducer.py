@@ -112,17 +112,19 @@ def apply_event(state: IncidentState, event: object) -> IncidentState:
             (a for a in state.containment_actions if a.action_id == event.action_id),
             None,
         )
+        if target_action is None:
+            raise InvariantViolation(f"Cannot release unmaterialized containment action '{event.action_id}'")
         new_release_action = ContainmentAction(
             action_id=f"REL-{event.action_id}",
             tenant_id=event.tenant_id,
             case_id=event.case_id,
             scope_id=event.scope_id,
-            scope_version=state.scopes[0].scope_version if state.scopes else 1,
+            scope_version=state.scopes[0].scope_version if state.scopes else target_action.scope_version,
             action_type="release_hold",
             status="succeeded",
-            target_record_ids=target_action.target_record_ids if target_action else ("FP-100-L240814-A", "FP-100-L240814-B"),
-            quantity=target_action.quantity if target_action else Decimal("200"),
-            policy_version="EVAL-RELEASE-01",
+            target_record_ids=target_action.target_record_ids,
+            quantity=target_action.quantity,
+            policy_version=target_action.policy_version,
             requested_at=event.occurred_at,
         )
         return _with_ledger_entry(
@@ -185,22 +187,21 @@ def apply_event(state: IncidentState, event: object) -> IncidentState:
         )
 
     if isinstance(event, ScopeProposedEvent):
-        updates: dict[str, object] = {}
-        if event.affected_record_ids:
-            scope = AffectedScope(
-                scope_id=event.scope_id,
-                tenant_id=event.tenant_id,
-                case_id=event.case_id,
-                case_version=event.case_version,
-                scope_version=event.scope_version,
-                status="proposed",
-                affected_record_ids=event.affected_record_ids,
-                evidence_record_ids=event.evidence_record_ids,
-                affected_quantity=event.affected_quantity,
-                created_at=event.occurred_at,
-            )
-            retained_scopes = tuple(s for s in state.scopes if s.scope_id != event.scope_id)
-            updates["scopes"] = (*retained_scopes, scope)
+        scope = AffectedScope(
+            scope_id=event.scope_id,
+            tenant_id=event.tenant_id,
+            case_id=event.case_id,
+            case_version=event.case_version,
+            scope_version=event.scope_version,
+            status="proposed",
+            affected_record_ids=event.affected_record_ids,
+            evidence_record_ids=event.evidence_record_ids,
+            affected_quantity=event.affected_quantity,
+            created_at=event.occurred_at,
+            ingredient_lot=getattr(event, "ingredient_lot", None),
+        )
+        retained_scopes = tuple(s for s in state.scopes if s.scope_id != event.scope_id)
+        updates = {"scopes": (*retained_scopes, scope)}
 
         return _with_ledger_entry(
             state,
@@ -224,7 +225,7 @@ def apply_event(state: IncidentState, event: object) -> IncidentState:
             action_type="provisional_hold",
             status="planned",
             target_record_ids=event.target_record_ids,
-            quantity=Decimal("200"),
+            quantity=event.quantity,
             policy_version=event.policy_version,
             requested_at=event.occurred_at,
         )

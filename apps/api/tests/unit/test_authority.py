@@ -1,6 +1,7 @@
 """Authority decisions bind each approval to its exact incident boundary."""
 
 from datetime import UTC, datetime
+from decimal import Decimal
 
 import pytest
 
@@ -102,6 +103,8 @@ def propose_scope(**overrides: object) -> ProposeScopeCommand:
             "case_version": 7,
             "scope_id": "SCOPE-EVAL-01",
             "scope_version": 4,
+            "affected_record_ids": ("FP-100-L240814-A", "FP-100-L240814-B"),
+            "affected_quantity": Decimal("200"),
             "evidence_record_ids": ("LAB-SIGNAL-20260814-001",),
             "policy_version": "SCOPE-POLICY-01",
             **overrides,

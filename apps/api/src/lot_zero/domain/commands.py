@@ -21,22 +21,24 @@ class CommandRecord(DomainRecord):
 
 
 class ProposeScopeCommand(CommandRecord):
-    kind: Literal["propose_scope"]
+    kind: Literal["propose_scope"] = "propose_scope"
     scope_id: Identifier
     scope_version: NonNegativeVersion
     affected_record_ids: tuple[Identifier, ...] = ()
-    affected_quantity: NonNegativeQuantity = Decimal("0")
+    affected_quantity: NonNegativeQuantity
     evidence_record_ids: Annotated[tuple[Identifier, ...], Field(min_length=1)]
     policy_version: Identifier
+    ingredient_lot: Identifier | None = None
 
 
 class RequestContainmentCommand(CommandRecord):
-    kind: Literal["request_containment"]
+    kind: Literal["request_containment"] = "request_containment"
     scope_id: Identifier
     scope_version: NonNegativeVersion
     policy_version: Identifier
     action_type: Literal["provisional_hold", "release_hold"]
     target_record_ids: Annotated[tuple[Identifier, ...], Field(min_length=1)]
+    quantity: NonNegativeQuantity
 
 
 class SendNotificationCommand(CommandRecord):

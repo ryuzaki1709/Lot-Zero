@@ -114,7 +114,7 @@ def analyze_safety_signal(
 
     prompt = (
         "You are an industrial food safety recall specialist. Analyze this laboratory notification and extract:\n"
-        "1. The exact raw ingredient lot identifier (e.g. ING-4417).\n"
+        "1. The exact raw ingredient lot identifier.\n"
         "2. The exact identified biological pathogen.\n"
         "3. Key grounding claims. For each claim, provide the claim_type and the EXACT character-for-character "
         "verbatim_quote copied directly from the text (do NOT calculate offsets and do NOT paraphrase).\n\n"

@@ -111,10 +111,11 @@ class AffectedScope(DomainRecord):
     case_version: NonNegativeVersion
     scope_version: NonNegativeVersion
     status: Literal["proposed", "approved", "superseded"]
-    affected_record_ids: Annotated[tuple[Identifier, ...], Field(min_length=1)]
+    affected_record_ids: tuple[Identifier, ...] = ()
     evidence_record_ids: Annotated[tuple[Identifier, ...], Field(min_length=1)]
     affected_quantity: NonNegativeQuantity
     created_at: datetime
+    ingredient_lot: Identifier | None = None
 
 
 class ImpactRecord(DomainRecord):

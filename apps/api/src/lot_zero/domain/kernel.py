@@ -81,6 +81,7 @@ def execute_command(
             affected_record_ids=command.affected_record_ids,
             affected_quantity=command.affected_quantity,
             evidence_record_ids=command.evidence_record_ids,
+            ingredient_lot=command.ingredient_lot,
             kind="scope_proposed",
             occurred_at=now,
         )
@@ -98,6 +99,7 @@ def execute_command(
             action_id=f"ACT-{command.command_id}",
             policy_version=command.policy_version,
             target_record_ids=command.target_record_ids,
+            quantity=command.quantity,
             kind="containment_requested",
             occurred_at=now,
         )

@@ -128,6 +128,7 @@ def test_command_and_event_unions_are_closed_by_kind():
             "policy_version": "policy-v1",
             "action_type": "provisional_hold",
             "target_record_ids": ["FP-100-L240814-A"],
+            "quantity": Decimal("100"),
         }
     )
     assert isinstance(command, RequestContainmentCommand)
@@ -142,11 +143,49 @@ def test_command_and_event_unions_are_closed_by_kind():
             "case_version": 1,
             "scope_version": 1,
             "scope_id": "SCOPE-001",
+            "affected_record_ids": ["FP-100-L240814-A"],
+            "affected_quantity": Decimal("100"),
             "evidence_record_ids": ["LAB-SIGNAL-20260814-001"],
             "occurred_at": "2026-08-14T12:00:00Z",
         }
     )
     assert isinstance(event, ScopeProposedEvent)
+
+    # Validating that omitting quantity on ContainmentRequestedEvent raises ValidationError
+    with pytest.raises(ValidationError):
+        Event.validate_python(
+            {
+                "kind": "containment_requested",
+                "event_id": "EVENT-002",
+                "tenant_id": "EVAL-TENANT-01",
+                "case_id": "CASE-001",
+                "actor_id": "ACTOR-001",
+                "case_version": 1,
+                "scope_version": 1,
+                "scope_id": "SCOPE-001",
+                "action_id": "ACT-001",
+                "policy_version": "POL-01",
+                "target_record_ids": ["FP-100-L240814-A"],
+                "occurred_at": "2026-08-14T12:00:00Z",
+            }
+        )
+
+    # Validating that omitting affected_quantity on ScopeProposedEvent raises ValidationError
+    with pytest.raises(ValidationError):
+        Event.validate_python(
+            {
+                "kind": "scope_proposed",
+                "event_id": "EVENT-003",
+                "tenant_id": "EVAL-TENANT-01",
+                "case_id": "CASE-001",
+                "actor_id": "ACTOR-001",
+                "case_version": 1,
+                "scope_version": 1,
+                "scope_id": "SCOPE-001",
+                "evidence_record_ids": ["LAB-SIGNAL-20260814-001"],
+                "occurred_at": "2026-08-14T12:00:00Z",
+            }
+        )
 
     with pytest.raises(ValidationError):
         Command.validate_python({"kind": "invented"})

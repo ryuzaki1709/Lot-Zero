@@ -5,7 +5,7 @@
 
 [![Live Service](https://img.shields.io/badge/Google_Cloud_Run-Live_Demo-4285F4?style=for-the-badge&logo=googlecloud&logoColor=white)](https://lot-zero-1051797806634.us-central1.run.app)
 [![Gemini 3.5](https://img.shields.io/badge/Vertex_AI-Gemini_3.5_Flash-34A853?style=for-the-badge&logo=googlegemini&logoColor=white)](https://cloud.google.com/vertex-ai)
-[![Tests](https://img.shields.io/badge/Pytest-119_Passed-00C853?style=for-the-badge&logo=pytest&logoColor=white)](apps/api/tests/)
+[![Tests](https://img.shields.io/badge/Pytest-132_Passed-00C853?style=for-the-badge&logo=pytest&logoColor=white)](apps/api/tests/)
 
 **Live Production Deployment**: [**https://lot-zero-1051797806634.us-central1.run.app**](https://lot-zero-1051797806634.us-central1.run.app)
 
@@ -20,11 +20,12 @@
 ### Core Architectural Pillars
 
 1. **Deterministic Domain Kernel & Authenticity Reducer** ([`kernel.py`](apps/api/src/lot_zero/domain/kernel.py), [`reducer.py`](apps/api/src/lot_zero/domain/reducer.py)):
-   - The reducer never invents quantities, recipients, hashes, or statuses.
-   - Graph traversal from contaminated raw ingredient `ING-4417` through manufactured finished batches `FP-100-L240814-A` and `B` (200 total units) is 100% deterministic with 0% AI hallucination on operational math. Clean negative control `FP-100-ADJ` (from `ING-4418`) remains unblocked.
+   - The reducer never invents quantities, recipients, hashes, or statuses; required quantity fields prevent silent zero-hold fallbacks.
+   - Operational quantities and containment scopes are computed deterministically by `compute_impact()` from supply chain records and are never model-derived, with model outputs strictly restricted to ingredient lot and pathogen identification subject to mechanical character-offset grounding checks. Clean negative control batches (`FP-100-ADJ`) remain unblocked, and unresolved topology boundaries (`EDGE-BROKEN-01`) are surfaced explicitly without hold corruption.
+   - State machine transitions are mediated strictly by `AdvancePhaseCommand` verifying allowed target phases and role permissions before recording events into the tamper-evident ledger hash chain.
 
 2. **Grounded Extraction via Gemini 3.5 Flash on Vertex AI** ([`gemini_agent.py`](apps/api/src/lot_zero/domain/gemini_agent.py)):
-   - Ingests raw lab reports with character-offset citation spans anchored to the lab document's SHA-256 digest using `gemini-3.5-flash` via the official `google-genai` SDK on Vertex AI (`location="global"`).
+   - Ingests raw lab reports with mechanical character-offset citation spans dynamically anchored to the document's computed SHA-256 digest using `gemini-3.5-flash` via the official `google-genai` SDK on Vertex AI (`location="global"`), with automatic rejection of non-verbatim quotes.
 
 3. **Append-Only SQLite Event Store on GCS FUSE** ([`sqlite_repository.py`](apps/api/src/lot_zero/adapters/sqlite_repository.py)):
    - Append-only `incident_events` table with schema `UNIQUE(tenant_id, case_id, stream_version)`.
@@ -53,7 +54,7 @@ All API endpoints strictly require authentication via the `X-API-Key` header. Pr
 | :--- | :--- | :--- | :--- |
 | `RECALL-COORD-01` | `recall_coordinator` | `key-recall-coord-01` | Signal simulation, propose scope, request holds |
 | `QA-LEAD-01` | `qa` | `key-qa-lead-01` | Approve scope/containment, Step 1 biological clearance |
-| `OPS-01` | `operations` | `key-ops-01` | Consignee notification dispatch, acknowledgement recording |
+| `OPS-01` | `customer_operations` | `key-ops-01` | Consignee notification dispatch, acknowledgement recording |
 | `CLOSURE-AUTH-01` | `closure_authority` | `key-closure-auth-01` | Step 2 operational release, § 7.49 non-response closure |
 | `AGENT-SVC-01` | `agent_service` | `key-agent-svc-01` | Background event ingestion & safety signals |
 
@@ -126,12 +127,12 @@ python scripts/verify_cloud_deploy.py https://lot-zero-1051797806634.us-central1
 
 ## 5. Automated Test Suite
 
-Run the full pytest suite (119 tests covering contracts, SQLite optimistic concurrency, replay equivalence, tenant isolation, dual-signature release, HMAC SSE stream tokens, and audit tamper detection):
+Run the full pytest suite (132 tests covering contracts, SQLite optimistic concurrency, replay equivalence, tenant isolation, dual-signature release, state machine legality, live GenAI grounding, deterministic traversal with unresolved edge propagation, reducer authenticity with required quantities, and audit tamper detection):
 
 ```bash
 cd apps/api
 pytest tests/
 ```
 ```
-======================= 119 passed, 1 warning in 1.00s =======================
+======================= 132 passed, 1 warning in 3.19s =======================
 ```

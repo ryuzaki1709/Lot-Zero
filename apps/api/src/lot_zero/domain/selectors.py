@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 from typing import Any
+from ..fixtures.loader import load_fixture
 from .models import IncidentState
 
 # Canonical Raw Source Laboratory Document
@@ -48,7 +49,12 @@ CITATION_SPANS = [
 ]
 
 
-def build_incident_projection(state: IncidentState, *, model_id: str | None = None) -> dict[str, Any]:
+def build_incident_projection(
+    state: IncidentState,
+    *,
+    model_id: str | None = None,
+    ingredient_lot: str | None = None,
+) -> dict[str, Any]:
     """Project strict incident state into the record-backed wire schema."""
     case = state.case
 
@@ -205,7 +211,6 @@ def build_incident_projection(state: IncidentState, *, model_id: str | None = No
         "record_ids": outstanding_acks if outstanding_acks else ["CLOSURE-GATE-EVAL-01"],
     }
 
-    from ..fixtures.loader import load_fixture
     fixture = load_fixture("evaluation-tenant-v1")
 
     # 9. Strict Production Graph & Reconciled Inventory Metrics (NO FABRICATION)
@@ -284,22 +289,32 @@ def build_incident_projection(state: IncidentState, *, model_id: str | None = No
             return "quarantine_active" if is_qa_firm_hold else "soft_hold_active"
         return "clear"
 
+    target_ingredient = (
+        ingredient_lot
+        or (state.scopes[0].ingredient_lot if state.scopes and getattr(state.scopes[0], "ingredient_lot", None) else None)
+        or fixture.signal.ingredient_lot
+    )
+    supplier_id = "SUP-MILLER-2026-08"
+    supplier_name = "Miller Mills Co-op"
+    source_facility = "Grain Silo 4, Minneapolis"
+    intake_mass = "500 kg"
+
     nodes = [
         {
-            "id": "SUP-MILLER-2026-08",
-            "label": "Supplier Lot SUP-MILLER-08 (Miller Mills)",
+            "id": supplier_id,
+            "label": f"Supplier Lot {supplier_id} ({supplier_name})",
             "type": "supplier_origin",
             "status": "investigated",
-            "source_facility": "Grain Silo 4, Minneapolis",
-            "intake_mass": "500 kg (Converted to 200 finished units @ 2.5kg flour/unit)",
+            "source_facility": source_facility,
+            "intake_mass": intake_mass,
         },
         {
-            "id": "ING-4417",
-            "label": "Organic Wheat Flour Lot ING-4417",
+            "id": target_ingredient,
+            "label": f"Organic Wheat Flour Lot {target_ingredient}",
             "type": "ingredient",
             "status": "contaminated",
             "hazard": "Salmonella enterica serovar Typhimurium",
-            "supplier": "Miller Mills Co-op",
+            "supplier": supplier_name,
         },
     ]
 
@@ -325,7 +340,7 @@ def build_incident_projection(state: IncidentState, *, model_id: str | None = No
     })
 
     edges = [
-        {"from": "SUP-MILLER-2026-08", "to": "ING-4417", "label": "Upstream Intake 500 kg (2.5kg/unit yield)"},
+        {"from": supplier_id, "to": target_ingredient, "label": f"Upstream Intake {intake_mass}"},
     ]
     for lot in fixture.operations.affected_finished_lots:
         edges.append({
@@ -370,7 +385,7 @@ def build_incident_projection(state: IncidentState, *, model_id: str | None = No
         "doc_hash": DOC_HASH,
         "received_at": "2026-08-14T12:00:00Z",
         "lab_name": "Apex Micro Quality Labs",
-        "tested_ingredient": "Organic Wheat Flour Lot ING-4417",
+        "tested_ingredient": f"Organic Wheat Flour Lot {target_ingredient}",
         "pathogen": "Salmonella enterica (Positive in 25g sample)",
         "cfu_count": "2.4 x 10^3 CFU/g",
         "raw_text": RAW_TEXT,

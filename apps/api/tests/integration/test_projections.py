@@ -71,6 +71,7 @@ async def test_case_summary_projections_and_filters():
             action_id="ACT-01",
             policy_version="POL-01",
             target_record_ids=("FP-01",),
+            quantity=Decimal("150"),
             occurred_at=NOW,
         )
         await repo.append("CASE-OPEN-HOLD", expected_version=0, events=[ev_c1, ev_c1_req], tenant_id=tenant)
@@ -142,12 +143,26 @@ async def test_case_summary_projections_and_filters():
             evidence_record_ids=("LAB-04",),
             occurred_at=NOW,
         )
-        ev_c4_rel = ContainmentReleasedEvent(
+        ev_c4_hold = ContainmentRequestedEvent(
             event_id="EVT-C4-02",
             tenant_id=tenant,
             case_id="CASE-CLOSED",
-            actor_id="QA-01",
+            actor_id="COORD-01",
             case_version=1,
+            scope_id="SCOPE-04",
+            scope_version=1,
+            action_id="ACT-04",
+            policy_version="POL-04",
+            target_record_ids=("FP-04",),
+            quantity=Decimal("30"),
+            occurred_at=NOW,
+        )
+        ev_c4_rel = ContainmentReleasedEvent(
+            event_id="EVT-C4-03",
+            tenant_id=tenant,
+            case_id="CASE-CLOSED",
+            actor_id="QA-01",
+            case_version=2,
             action_id="ACT-04",
             scope_id="SCOPE-04",
             retest_doc_id="LAB-RETEST-04",
@@ -155,15 +170,15 @@ async def test_case_summary_projections_and_filters():
             occurred_at=NOW,
         )
         ev_c4_close = TransitionEvent(
-            event_id="EVT-C4-03",
+            event_id="EVT-C4-04",
             tenant_id=tenant,
             case_id="CASE-CLOSED",
-            case_version=2,
+            case_version=3,
             kind="advance",
             target_phase="scope_review",
             occurred_at=NOW,
         )
-        await repo.append("CASE-CLOSED", expected_version=0, events=[ev_c4_scope, ev_c4_rel, ev_c4_close], tenant_id=tenant)
+        await repo.append("CASE-CLOSED", expected_version=0, events=[ev_c4_scope, ev_c4_hold, ev_c4_rel, ev_c4_close], tenant_id=tenant)
 
         # 1. Query all
         all_cases = query_case_summaries(repo._conn, tenant, filter_type="all")
