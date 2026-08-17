@@ -32,6 +32,9 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copy built frontend assets to static mount location
 COPY --from=frontend-builder /app/web/dist /app/apps/web/dist
 
+# Copy evaluation fixtures
+COPY fixtures /app/fixtures
+
 # Create storage volume mount directory for Cloud Storage (gcsfuse)
 RUN mkdir -p /app/data
 
