@@ -319,3 +319,222 @@ def test_build_incident_projection_scope_missing_ingredient_lot_raises_invariant
         build_incident_projection(state_corrupted_scope)
 
 
+def test_notification_requested_event_omitted_recipients_raises_validation_error():
+    """Verify that constructing NotificationRequestedEvent without recipient_ids raises ValidationError."""
+    from pydantic import ValidationError
+    from lot_zero.domain.events import NotificationRequestedEvent
+
+    with pytest.raises(ValidationError):
+        NotificationRequestedEvent(  # type: ignore[call-arg]
+            event_id="EVT-NOTIF-01",
+            tenant_id=TENANT_ID,
+            case_id=CASE_ID,
+            actor_id="OPS-01",
+            case_version=0,
+            scope_id="SCOPE-01",
+            scope_version=1,
+            packet_id="PKT-001",
+            payload_version="PL-01",
+            payload_hash="payload-sha256-verified-digest",
+            policy_version="POL-01",
+            occurred_at=NOW,
+        )
+
+
+def test_notification_requested_event_omitted_payload_hash_raises_validation_error():
+    """Verify that constructing NotificationRequestedEvent without payload_hash raises ValidationError."""
+    from pydantic import ValidationError
+    from lot_zero.domain.events import NotificationRequestedEvent
+
+    with pytest.raises(ValidationError):
+        NotificationRequestedEvent(  # type: ignore[call-arg]
+            event_id="EVT-NOTIF-01",
+            tenant_id=TENANT_ID,
+            case_id=CASE_ID,
+            actor_id="OPS-01",
+            case_version=0,
+            scope_id="SCOPE-01",
+            scope_version=1,
+            packet_id="PKT-001",
+            payload_version="PL-01",
+            policy_version="POL-01",
+            recipient_ids=("REC-001",),
+            occurred_at=NOW,
+        )
+
+
+def test_notification_requested_event_folds_exact_recipient_ids_and_payload_hash():
+    """Verify that folding a NotificationRequestedEvent with 3 recipients creates a packet with exactly those 3."""
+    from lot_zero.domain.events import NotificationRequestedEvent
+
+    initial_state = make_test_state()
+    recipients = ("REC-ALPHA", "REC-BETA", "REC-GAMMA")
+    payload_hash = "f4c8996fb92427ae41e4649b934ca495991b7852b855e3b0c44298fc1c149afb"
+
+    event = NotificationRequestedEvent(
+        event_id="EVT-NOTIF-3REC",
+        tenant_id=TENANT_ID,
+        case_id=CASE_ID,
+        actor_id="OPS-01",
+        case_version=0,
+        scope_id="SCOPE-01",
+        scope_version=1,
+        packet_id="PKT-999",
+        payload_version="PL-999",
+        payload_hash=payload_hash,
+        policy_version="POL-999",
+        recipient_ids=recipients,
+        occurred_at=NOW,
+    )
+
+    state_after = apply_event(initial_state, event)
+
+    assert len(state_after.notification_packets) == 1
+    packet = state_after.notification_packets[0]
+    assert packet.packet_id == "PKT-999"
+    assert packet.recipient_ids == recipients
+    assert packet.payload_hash == payload_hash
+    assert packet.status == "planned"
+
+
+@pytest.mark.anyio
+async def test_full_lifecycle_route_1_dual_signature_release_replay_equality():
+    """Proving test: drive the full dual-signature release lifecycle through the API to phase 'closed',
+
+    construct fresh state by rehydrating the persisted event stream, and assert 100% field-for-field equality.
+    """
+    import httpx
+    from lot_zero.app import app, repository, DEFAULT_CASE_ID
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        # Reset
+        res_reset = await client.post("/api/evaluation/reset", headers={"X-API-Key": "key-recall-coord-01"})
+        assert res_reset.status_code == 200
+
+        # 1. Simulate signal
+        res_sig = await client.post("/api/evaluation/simulate-signal", headers={"X-API-Key": "key-recall-coord-01"})
+        assert res_sig.status_code == 200
+
+        # 2. QA Lead approves containment
+        res_app = await client.post(
+            "/api/evaluation/approve-containment",
+            headers={"X-API-Key": "key-qa-lead-01"},
+            json={"rationale": "QA Lead biological risk confirmation"},
+        )
+        assert res_app.status_code == 200
+
+        # 3. Customer Operations dispatches outbox
+        res_out = await client.post("/api/evaluation/dispatch-outbox", headers={"X-API-Key": "key-ops-01"})
+        assert res_out.status_code == 200
+
+        # 4. Resolve ACK-006 via phone attestation
+        res_ack = await client.post(
+            "/api/evaluation/resolve-ack",
+            headers={"X-API-Key": "key-ops-01"},
+            json={
+                "caller_id": "OPS-01",
+                "recipient_contact": "Distributor Manager",
+                "recipient_phone": "+1-612-555-0199",
+                "call_timestamp": "2026-08-14T13:00:00Z",
+                "attestation_notes": "Distributor confirmed warehouse quarantine",
+            },
+        )
+        assert res_ack.status_code == 200
+
+        # 5. Step 1 Release: QA Lead biological clearance
+        res_rel1 = await client.post(
+            "/api/evaluation/release-hold/step",
+            headers={"X-API-Key": "key-qa-lead-01"},
+            json={
+                "retest_doc_id": "LAB-RETEST-9921",
+                "retest_doc_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "rationale": "QA Lead verified negative re-test certificate",
+            },
+        )
+        assert res_rel1.status_code == 200
+
+        # 6. Step 2 Release: Closure Authority operational release
+        res_rel2 = await client.post(
+            "/api/evaluation/release-hold/step",
+            headers={"X-API-Key": "key-closure-auth-01"},
+            json={
+                "retest_doc_id": "LAB-RETEST-9921",
+                "retest_doc_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "rationale": "Closure Authority authorizes release to inventory",
+            },
+        )
+        assert res_rel2.status_code == 200
+
+        # 7. Request closure -> closed
+        res_close = await client.post("/api/evaluation/request-closure", headers={"X-API-Key": "key-recall-coord-01"})
+        assert res_close.status_code == 200
+        assert res_close.json()["status"] == "closed"
+
+        # Obtain live state from memory and rehydrated state from persistent SQLite event store
+        from lot_zero.app import current_state as live_state
+
+        loaded_state = await repository.load(DEFAULT_CASE_ID, tenant_id=TENANT_ID)
+        assert loaded_state is not None
+
+        # Assert full equality
+        assert live_state.case.phase == "closed"
+        assert loaded_state.case.phase == "closed"
+        assert live_state == loaded_state
+
+
+@pytest.mark.anyio
+async def test_full_lifecycle_route_2_non_response_closure_replay_equality():
+    """Proving test: drive the § 7.49 non-response closure lifecycle through the API to phase 'closed',
+
+    construct fresh state by rehydrating the persisted event stream, and assert 100% field-for-field equality.
+    """
+    import httpx
+    from lot_zero.app import app, repository, DEFAULT_CASE_ID
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        # Reset
+        res_reset = await client.post("/api/evaluation/reset", headers={"X-API-Key": "key-recall-coord-01"})
+        assert res_reset.status_code == 200
+
+        # 1. Simulate signal
+        res_sig = await client.post("/api/evaluation/simulate-signal", headers={"X-API-Key": "key-recall-coord-01"})
+        assert res_sig.status_code == 200
+
+        # 2. QA Lead approves containment
+        res_app = await client.post(
+            "/api/evaluation/approve-containment",
+            headers={"X-API-Key": "key-qa-lead-01"},
+            json={"rationale": "QA Lead biological risk confirmation"},
+        )
+        assert res_app.status_code == 200
+
+        # 3. Customer Operations dispatches outbox
+        res_out = await client.post("/api/evaluation/dispatch-outbox", headers={"X-API-Key": "key-ops-01"})
+        assert res_out.status_code == 200
+
+        # 4. Close under 21 CFR § 7.49 non-response
+        res_close = await client.post(
+            "/api/evaluation/close-with-non-response",
+            headers={"X-API-Key": "key-closure-auth-01"},
+            json={
+                "attempt_count": 3,
+                "regulatory_filing_id": "FDA-REF-2026-0814-001",
+                "good_faith_notes": "Documented 3 certified contact attempts; referred to FDA District Office.",
+            },
+        )
+        assert res_close.status_code == 200
+        assert res_close.json()["status"] == "closed_documented_non_response"
+
+        # Obtain live state from memory and rehydrated state from persistent SQLite event store
+        from lot_zero.app import current_state as live_state
+
+        loaded_state = await repository.load(DEFAULT_CASE_ID, tenant_id=TENANT_ID)
+        assert loaded_state is not None
+
+        # Assert full equality
+        assert live_state.case.phase == "closed"
+        assert loaded_state.case.phase == "closed"
+        assert live_state == loaded_state
+
+
+

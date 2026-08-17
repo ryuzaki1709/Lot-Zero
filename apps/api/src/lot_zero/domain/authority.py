@@ -129,14 +129,11 @@ def _authorize_notification(
         (packet for packet in state.notification_packets if packet.packet_id == command.packet_id),
         None,
     )
-    if packet is None:
-        return _deny(
-            "MISSING_NOTIFICATION_PACKET", "notification packet is not present in the incident"
-        )
-    if packet.scope_version != command.scope_version:
-        return _deny("STALE_SCOPE_VERSION", "packet is bound to another scope version")
-    if packet.payload_version != command.payload_version:
-        return _deny("STALE_PAYLOAD_VERSION", "command is bound to an old payload version")
+    if packet is not None:
+        if packet.scope_version != command.scope_version:
+            return _deny("STALE_SCOPE_VERSION", "packet is bound to another scope version")
+        if packet.payload_version != command.payload_version:
+            return _deny("STALE_PAYLOAD_VERSION", "command is bound to an old payload version")
     approval_denial = _notification_approval(command, state)
     if approval_denial is not None:
         return approval_denial

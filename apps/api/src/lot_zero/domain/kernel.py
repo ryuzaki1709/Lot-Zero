@@ -117,7 +117,9 @@ def execute_command(
             scope_version=command.scope_version,
             packet_id=command.packet_id,
             payload_version=command.payload_version,
+            payload_hash=command.payload_hash,
             policy_version=command.policy_version,
+            recipient_ids=command.recipient_ids,
             kind="notification_requested",
             occurred_at=now,
         )

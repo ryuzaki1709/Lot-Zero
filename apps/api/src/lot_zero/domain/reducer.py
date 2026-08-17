@@ -31,6 +31,7 @@ from .models import (
     ContainmentAction,
     IncidentState,
     LedgerEntry,
+    NotificationPacket,
 )
 from .transitions import TransitionEvent, transition
 
@@ -244,6 +245,19 @@ def apply_event(state: IncidentState, event: object) -> IncidentState:
         )
 
     if isinstance(event, NotificationRequestedEvent):
+        packet = NotificationPacket(
+            packet_id=event.packet_id,
+            tenant_id=event.tenant_id,
+            case_id=event.case_id,
+            scope_id=event.scope_id,
+            scope_version=event.scope_version,
+            payload_version=event.payload_version,
+            payload_hash=event.payload_hash,
+            status="planned",
+            recipient_ids=event.recipient_ids,
+            created_at=event.occurred_at,
+        )
+        retained_packets = tuple(p for p in state.notification_packets if p.packet_id != event.packet_id)
         return _with_ledger_entry(
             state,
             now=event.occurred_at,
@@ -251,8 +265,9 @@ def apply_event(state: IncidentState, event: object) -> IncidentState:
             tenant_id=event.tenant_id,
             case_id=event.case_id,
             entry_type="NOTIFICATION_REQUESTED",
-            record_ids=(event.packet_id, event.payload_version),
+            record_ids=(event.packet_id, event.payload_version, *event.recipient_ids),
             payload_hash=canonical_sha256(event),
+            updates={"notification_packets": (*retained_packets, packet)},
         )
 
     if isinstance(event, ClosureRequestedEvent):

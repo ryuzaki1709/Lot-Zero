@@ -125,6 +125,7 @@ def send_notification(**overrides: object) -> SendNotificationCommand:
             "scope_version": 4,
             "packet_id": "PACKET-001",
             "payload_version": "PAYLOAD-002",
+            "payload_hash": "hash-notify-payload-01",
             "policy_version": "NOTIFY-POLICY-01",
             "recipient_ids": ("RECIPIENT-001",),
             **overrides,

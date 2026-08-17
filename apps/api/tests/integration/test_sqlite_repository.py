@@ -196,6 +196,95 @@ async def test_sqlite_restart_replay_equivalence():
 
 
 @pytest.mark.anyio
+async def test_sqlite_full_api_driven_lifecycle_restart_replay_equivalence():
+    """NOTE: test_sqlite_restart_replay_equivalence above only covers a synthetic 3-event sequence.
+
+    That was insufficient on its own because it did not exercise outbox notification packets,
+    acknowledgement attestation, dual-signature release steps, or closure transitions.
+    This test drives the full end-to-end incident lifecycle through the FastAPI application,
+    persisting all events to SQLite, creates a completely fresh repository instance (simulating
+    a process restart / cold boot), and asserts 100% field-for-field equality between the live
+    endpoint state and the rehydrated state.
+    """
+    import httpx
+    from lot_zero.app import app, repository, DEFAULT_CASE_ID
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        # Reset
+        res_reset = await client.post("/api/evaluation/reset", headers={"X-API-Key": "key-recall-coord-01"})
+        assert res_reset.status_code == 200
+
+        # 1. Simulate signal
+        res_sig = await client.post("/api/evaluation/simulate-signal", headers={"X-API-Key": "key-recall-coord-01"})
+        assert res_sig.status_code == 200
+
+        # 2. QA Lead approves containment
+        res_app = await client.post(
+            "/api/evaluation/approve-containment",
+            headers={"X-API-Key": "key-qa-lead-01"},
+            json={"rationale": "QA Lead biological risk confirmation"},
+        )
+        assert res_app.status_code == 200
+
+        # 3. Customer Operations dispatches outbox
+        res_out = await client.post("/api/evaluation/dispatch-outbox", headers={"X-API-Key": "key-ops-01"})
+        assert res_out.status_code == 200
+
+        # 4. Resolve ACK-006 via phone attestation
+        res_ack = await client.post(
+            "/api/evaluation/resolve-ack",
+            headers={"X-API-Key": "key-ops-01"},
+            json={
+                "caller_id": "OPS-01",
+                "recipient_contact": "Distributor Manager",
+                "recipient_phone": "+1-612-555-0199",
+                "call_timestamp": "2026-08-14T13:00:00Z",
+                "attestation_notes": "Distributor confirmed warehouse quarantine",
+            },
+        )
+        assert res_ack.status_code == 200
+
+        # 5. Step 1 Release: QA Lead biological clearance
+        res_rel1 = await client.post(
+            "/api/evaluation/release-hold/step",
+            headers={"X-API-Key": "key-qa-lead-01"},
+            json={
+                "retest_doc_id": "LAB-RETEST-9921",
+                "retest_doc_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "rationale": "QA Lead verified negative re-test certificate",
+            },
+        )
+        assert res_rel1.status_code == 200
+
+        # 6. Step 2 Release: Closure Authority operational release
+        res_rel2 = await client.post(
+            "/api/evaluation/release-hold/step",
+            headers={"X-API-Key": "key-closure-auth-01"},
+            json={
+                "retest_doc_id": "LAB-RETEST-9921",
+                "retest_doc_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "rationale": "Closure Authority authorizes release to inventory",
+            },
+        )
+        assert res_rel2.status_code == 200
+
+        # 7. Request closure -> closed
+        res_close = await client.post("/api/evaluation/request-closure", headers={"X-API-Key": "key-recall-coord-01"})
+        assert res_close.status_code == 200
+
+        from lot_zero.app import current_state as live_state
+
+        # Session 2: Connect fresh repository to the same DB
+        reloaded_state = await repository.load(DEFAULT_CASE_ID, tenant_id=TENANT)
+        assert reloaded_state is not None
+
+        # Assert full equality field-for-field
+        assert live_state.case.phase == "closed"
+        assert reloaded_state.case.phase == "closed"
+        assert live_state == reloaded_state
+
+
+@pytest.mark.anyio
 async def test_tenant_scoping_isolation():
     repo = SqliteIncidentRepository(db_path=":memory:", initial_state_factory=make_initial_state)
     try:

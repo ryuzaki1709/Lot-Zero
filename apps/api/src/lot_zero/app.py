@@ -12,11 +12,16 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
+from contextlib import asynccontextmanager
+import logging
+
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, StringConstraints
+
+logger = logging.getLogger("lot_zero.app")
 
 from .adapters.demo_sink import DemoNotificationSink
 from .adapters.sqlite_repository import SqliteIncidentRepository
@@ -59,27 +64,6 @@ NOW = datetime(2026, 8, 14, 12, 0, 0, tzinfo=UTC)
 TENANT_ID = "EVAL-TENANT-01"
 DEFAULT_CASE_ID = "EVAL-CASE-01"
 
-app = FastAPI(
-    title="Lot Zero Incident API",
-    description="Deterministic evidence-backed recall incident platform",
-    version="1.0.0",
-)
-
-# Valid CORS configuration with explicit origins and regex for credentials support
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    ],
-    allow_origin_regex=r"https://.*\.run\.app",
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 
 class AuditAccessEntry(BaseModel):
     action_type: str = "case_accessed"
@@ -120,6 +104,53 @@ repository = SqliteIncidentRepository(
     initial_state_factory=create_initial_state,
 )
 containment_executor = ContainmentExecutor(repository=repository, sink=notification_sink)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Rehydrate current_state from durable SQLite event store on startup or fail loudly."""
+    global current_state
+    async with state_lock:
+        try:
+            loaded_state = await repository.load(DEFAULT_CASE_ID, tenant_id=TENANT_ID)
+            if loaded_state is not None:
+                current_state = loaded_state
+                logger.info(
+                    "Rehydrated current_state from SQLite event store (phase=%s, v=%d, ledger_entries=%d)",
+                    current_state.case.phase,
+                    current_state.case.case_version,
+                    len(current_state.ledger),
+                )
+            else:
+                current_state = create_initial_state()
+                logger.info("Initialized fresh current_state baseline (no prior events found)")
+        except Exception as exc:
+            logger.critical("FATAL: Failed to rehydrate incident state from SQLite: %s", exc, exc_info=True)
+            raise RuntimeError(f"FATAL: Failed to rehydrate incident state from SQLite event store: {exc}") from exc
+    yield
+
+
+app = FastAPI(
+    title="Lot Zero Incident API",
+    description="Deterministic evidence-backed recall incident platform",
+    version="1.0.0",
+    lifespan=lifespan,
+)
+
+# Valid CORS configuration with explicit origins and regex for credentials support
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
+    allow_origin_regex=r"https://.*\.run\.app",
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 def _sync_state_ttl(state: IncidentState, now: datetime) -> IncidentState:
@@ -613,27 +644,7 @@ async def approve_containment(
         res3 = execute_command(current_state, notif_app_cmd, ops_approver, occurred_at=now)
         if not res3.decision.allowed:
             raise HTTPException(status_code=400, detail=res3.decision.explanation)
-
-        notif_packet = NotificationPacket(
-            packet_id="PKT-001",
-            tenant_id=TENANT_ID,
-            case_id=current_state.case.case_id,
-            scope_id="SCOPE-EVAL-01",
-            scope_version=1,
-            payload_version="PAYLOAD-001",
-            payload_hash="payload-sha256-verified-digest",
-            status="planned",
-            recipient_ids=(
-                "RECIPIENT-001",
-                "RECIPIENT-002",
-                "RECIPIENT-003",
-                "RECIPIENT-004",
-                "RECIPIENT-005",
-                "RECIPIENT-006",
-            ),
-            created_at=now,
-        )
-        current_state = res3.state.model_copy(update={"notification_packets": (notif_packet,)})
+        current_state = res3.state
 
         # Advance: provisional_containment -> action_review
         adv_action_cmd = AdvancePhaseCommand(
@@ -669,6 +680,8 @@ async def dispatch_outbox(principal: Principal = Depends(get_current_principal))
 
     async with state_lock:
         # 1. Send notification command
+        fixture = load_fixture("evaluation-tenant-v1")
+        recipients = tuple(r.recipient_id for r in fixture.operations.recipients)
         notif_cmd = SendNotificationCommand(
             kind="send_notification",
             command_id=f"CMD-NOTIF-{current_state.case.case_version + 1}",
@@ -680,15 +693,9 @@ async def dispatch_outbox(principal: Principal = Depends(get_current_principal))
             scope_version=1,
             packet_id="PKT-001",
             payload_version="PAYLOAD-001",
+            payload_hash="payload-sha256-verified-digest",
             policy_version="EVAL-HOLD-01",
-            recipient_ids=(
-                "RECIPIENT-001",
-                "RECIPIENT-002",
-                "RECIPIENT-003",
-                "RECIPIENT-004",
-                "RECIPIENT-005",
-                "RECIPIENT-006",
-            ),
+            recipient_ids=recipients,
         )
         res1 = execute_command(current_state, notif_cmd, principal, occurred_at=now)
         if not res1.decision.allowed:

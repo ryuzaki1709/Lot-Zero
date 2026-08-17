@@ -30,7 +30,7 @@
 3. **Append-Only SQLite Event Store on GCS FUSE** ([`sqlite_repository.py`](apps/api/src/lot_zero/adapters/sqlite_repository.py)):
    - Append-only `incident_events` table with schema `UNIQUE(tenant_id, case_id, stream_version)`.
    - Optimistic concurrency control via `expected_version` checks.
-   - Persistent across container restarts via Google Cloud Storage FUSE mount (`/app/data/lot_zero.db`).
+   - Persistent across container restarts: FastAPI lifespan handler rehydrates `current_state` by replaying the event stream from SQLite on GCS FUSE (`/app/data/lot_zero.db`) on cold boot, verified by field-for-field replay equivalence assertions across all lifecycle closure routes.
 
 4. **Strict Separation of Duties & Dual-Signature Release Rail**:
    - Server-enforced role gates reject self-approvals with **HTTP 403 Forbidden** (`requester and approver must be different people`).
@@ -123,16 +123,24 @@ Verify the live deployment:
 python scripts/verify_cloud_deploy.py https://lot-zero-1051797806634.us-central1.run.app
 ```
 
+### Before Demoing: Resetting Incident State
+Because event logs and incident state are fully persistent across container restarts, an in-progress walkthrough by one evaluator will be preserved. To return the incident case to a clean, unseeded baseline before running a new evaluation demo:
+```bash
+curl -X POST https://lot-zero-1051797806634.us-central1.run.app/api/evaluation/reset \
+     -H "X-API-Key: key-recall-coord-01"
+```
+Or click **Reset State** in the web UI. This is a deliberate operator action that truncates the evaluation stream and resets `current_state` to `signal_received` with zero non-deterministic timer side effects.
+
 ---
 
 ## 5. Automated Test Suite
 
-Run the full pytest suite (135 tests covering contracts, SQLite optimistic concurrency, replay equivalence, tenant isolation, dual-signature release, state machine legality, live GenAI grounding, deterministic traversal with unresolved edge propagation, reducer authenticity with required quantities, and audit tamper detection):
+Run the full pytest suite (141 tests covering contracts, SQLite optimistic concurrency, replay equivalence across full closure lifecycles, tenant isolation, dual-signature release, state machine legality, live GenAI grounding, deterministic traversal with unresolved edge propagation, reducer authenticity with required quantities and notification payloads, and audit tamper detection):
 
 ```bash
 cd apps/api
 pytest tests/
 ```
 ```
-======================= 135 passed, 1 warning in 3.10s =======================
+======================= 141 passed, 1 warning in 1.37s =======================
 ```

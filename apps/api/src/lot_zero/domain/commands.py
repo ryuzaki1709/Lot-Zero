@@ -48,6 +48,7 @@ class SendNotificationCommand(CommandRecord):
     scope_version: NonNegativeVersion
     packet_id: Identifier
     payload_version: Identifier
+    payload_hash: Identifier
     policy_version: Identifier
     recipient_ids: Annotated[tuple[Identifier, ...], Field(min_length=1)]
 
