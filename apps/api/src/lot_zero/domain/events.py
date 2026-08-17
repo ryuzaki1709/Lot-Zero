@@ -36,6 +36,7 @@ class ScopeProposedEvent(EventRecord):
     affected_quantity: NonNegativeQuantity
     evidence_record_ids: Annotated[tuple[Identifier, ...], Field(min_length=1)]
     ingredient_lot: Identifier | None = None
+    pathogen: str | None = None
 
 
 class ContainmentRequestedEvent(EventRecord):

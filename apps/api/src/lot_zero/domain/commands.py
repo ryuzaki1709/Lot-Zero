@@ -29,6 +29,7 @@ class ProposeScopeCommand(CommandRecord):
     evidence_record_ids: Annotated[tuple[Identifier, ...], Field(min_length=1)]
     policy_version: Identifier
     ingredient_lot: Identifier | None = None
+    pathogen: str | None = None
 
 
 class RequestContainmentCommand(CommandRecord):

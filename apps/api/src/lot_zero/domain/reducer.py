@@ -199,6 +199,7 @@ def apply_event(state: IncidentState, event: object) -> IncidentState:
             affected_quantity=event.affected_quantity,
             created_at=event.occurred_at,
             ingredient_lot=getattr(event, "ingredient_lot", None),
+            pathogen=getattr(event, "pathogen", None),
         )
         retained_scopes = tuple(s for s in state.scopes if s.scope_id != event.scope_id)
         updates = {"scopes": (*retained_scopes, scope)}

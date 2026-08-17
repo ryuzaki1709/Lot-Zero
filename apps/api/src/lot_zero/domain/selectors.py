@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 from typing import Any
 from ..fixtures.loader import load_fixture
+from .errors import InvariantViolation
 from .models import IncidentState
 
 # Canonical Raw Source Laboratory Document
@@ -54,6 +55,7 @@ def build_incident_projection(
     *,
     model_id: str | None = None,
     ingredient_lot: str | None = None,
+    pathogen: str | None = None,
 ) -> dict[str, Any]:
     """Project strict incident state into the record-backed wire schema."""
     case = state.case
@@ -289,81 +291,96 @@ def build_incident_projection(
             return "quarantine_active" if is_qa_firm_hold else "soft_hold_active"
         return "clear"
 
-    target_ingredient = (
-        ingredient_lot
-        or (state.scopes[0].ingredient_lot if state.scopes and getattr(state.scopes[0], "ingredient_lot", None) else None)
-        or fixture.signal.ingredient_lot
-    )
-    supplier_id = "SUP-MILLER-2026-08"
-    supplier_name = "Miller Mills Co-op"
-    source_facility = "Grain Silo 4, Minneapolis"
-    intake_mass = "500 kg"
-
-    nodes = [
-        {
-            "id": supplier_id,
-            "label": f"Supplier Lot {supplier_id} ({supplier_name})",
-            "type": "supplier_origin",
-            "status": "investigated",
-            "source_facility": source_facility,
-            "intake_mass": intake_mass,
-        },
-        {
-            "id": target_ingredient,
-            "label": f"Organic Wheat Flour Lot {target_ingredient}",
-            "type": "ingredient",
-            "status": "contaminated",
-            "hazard": "Salmonella enterica serovar Typhimurium",
-            "supplier": supplier_name,
-        },
-    ]
-
-    for lot in fixture.operations.affected_finished_lots:
-        suffix = lot.lot_id.split("-")[-1]
-        nodes.append({
-            "id": lot.lot_id,
-            "label": f"Finished Cereal Box 500g (Batch {suffix})",
-            "type": "finished_product",
-            "quantity": lot.quantity,
-            "hold_status": get_batch_hold_status(lot.lot_id),
-            "line": f"Packaging Line {suffix}",
-        })
-
-    adj = fixture.operations.adjacent_unaffected_batch
-    nodes.append({
-        "id": adj.lot_id,
-        "label": f"Adjacent Batch {adj.lot_id} (Lot {adj.ingredient_lot})",
-        "type": "unaffected_batch",
-        "quantity": adj.quantity,
-        "hold_status": "clear",
-        "note": "Clean wheat batch from Silo 2 (Proven Negative Control · 0 Held)",
-    })
-
-    edges = [
-        {"from": supplier_id, "to": target_ingredient, "label": f"Upstream Intake {intake_mass}"},
-    ]
-    for lot in fixture.operations.affected_finished_lots:
-        edges.append({
-            "from": lot.ingredient_lot,
-            "to": lot.lot_id,
-            "label": f"Batch Allocation {lot.quantity} units",
-        })
-
-    unresolved_edges = [
-        {
-            "edge_id": edge.edge_id,
-            "source_id": edge.source_id,
-            "target_id": edge.target_id,
-            "note": f"Unresolved genealogy boundary: downstream node {edge.target_id} has no finished product records",
+    # 10. Bidirectional Genealogy DAG with true release state & unresolved boundaries
+    if not state.scopes and not ingredient_lot:
+        genealogy = {
+            "nodes": [],
+            "edges": [],
+            "unresolved_edges": [],
         }
-        for edge in fixture.operations.broken_genealogy_edges
-    ]
+        target_ingredient = None
+        target_pathogen = None
+    else:
+        if state.scopes:
+            target_ingredient = ingredient_lot or state.scopes[0].ingredient_lot
+            target_pathogen = pathogen or getattr(state.scopes[0], "pathogen", None)
+            if not target_ingredient:
+                raise InvariantViolation(f"Scope '{state.scopes[0].scope_id}' exists on IncidentState but carries no ingredient_lot")
+        else:
+            target_ingredient = ingredient_lot
+            target_pathogen = pathogen
 
-    genealogy = {
-        "nodes": nodes,
-        "edges": edges,
-        "unresolved_edges": unresolved_edges,
-    }
+        # Note: Supplier provenance is out of scope for evaluation-tenant-v1 fixture; supplier metadata is fixed for Minneapolis Grain Silo 4
+        supplier_id = "SUP-MILLER-2026-08"
+        supplier_name = "Miller Mills Co-op"
+        source_facility = "Grain Silo 4, Minneapolis"
+        intake_mass = "500 kg"
+
+        nodes = [
+            {
+                "id": supplier_id,
+                "label": f"Supplier Lot {supplier_id} ({supplier_name})",
+                "type": "supplier_origin",
+                "status": "investigated",
+                "source_facility": source_facility,
+                "intake_mass": intake_mass,
+            },
+            {
+                "id": target_ingredient,
+                "label": f"Organic Wheat Flour Lot {target_ingredient}",
+                "type": "ingredient",
+                "status": "contaminated",
+                "hazard": target_pathogen or "Biological Pathogen",
+                "supplier": supplier_name,
+            },
+        ]
+
+        for lot in fixture.operations.affected_finished_lots:
+            suffix = lot.lot_id.split("-")[-1]
+            nodes.append({
+                "id": lot.lot_id,
+                "label": f"Finished Cereal Box 500g (Batch {suffix})",
+                "type": "finished_product",
+                "quantity": lot.quantity,
+                "hold_status": get_batch_hold_status(lot.lot_id),
+                "line": f"Packaging Line {suffix}",
+            })
+
+        adj = fixture.operations.adjacent_unaffected_batch
+        nodes.append({
+            "id": adj.lot_id,
+            "label": f"Adjacent Batch {adj.lot_id} (Lot {adj.ingredient_lot})",
+            "type": "unaffected_batch",
+            "quantity": adj.quantity,
+            "hold_status": "clear",
+            "note": "Clean wheat batch from Silo 2 (Proven Negative Control · 0 Held)",
+        })
+
+        edges = [
+            {"from": supplier_id, "to": target_ingredient, "label": f"Upstream Intake {intake_mass}"},
+        ]
+        for lot in fixture.operations.affected_finished_lots:
+            edges.append({
+                "from": lot.ingredient_lot,
+                "to": lot.lot_id,
+                "label": f"Batch Allocation {lot.quantity} units",
+            })
+
+        unresolved_edges = [
+            {
+                "edge_id": edge.edge_id,
+                "source_id": edge.source_id,
+                "target_id": edge.target_id,
+                "note": f"Unresolved genealogy boundary: downstream node {edge.target_id} has no finished product records",
+            }
+            for edge in fixture.operations.broken_genealogy_edges
+        ]
+
+        genealogy = {
+            "nodes": nodes,
+            "edges": edges,
+            "unresolved_edges": unresolved_edges,
+        }
 
     # 11. Immutable Ledger Entries List (Projected for UI)
     ledger_list = [
@@ -385,8 +402,8 @@ def build_incident_projection(
         "doc_hash": DOC_HASH,
         "received_at": "2026-08-14T12:00:00Z",
         "lab_name": "Apex Micro Quality Labs",
-        "tested_ingredient": f"Organic Wheat Flour Lot {target_ingredient}",
-        "pathogen": "Salmonella enterica (Positive in 25g sample)",
+        "tested_ingredient": f"Organic Wheat Flour Lot {target_ingredient}" if target_ingredient else "Organic Wheat Flour",
+        "pathogen": target_pathogen if target_pathogen else "Biological Pathogen (Positive in 25g sample)",
         "cfu_count": "2.4 x 10^3 CFU/g",
         "raw_text": RAW_TEXT,
         "citation_spans": CITATION_SPANS,

@@ -457,6 +457,7 @@ async def simulate_signal(principal: Principal = Depends(get_current_principal))
             evidence_record_ids=tuple(s.evidence_id for s in signal_res.spans) or ("EVID-01", "EVID-02", "EVID-03"),
             policy_version="EVAL-HOLD-01",
             ingredient_lot=signal_res.ingredient_lot,
+            pathogen=signal_res.pathogen,
         )
         res1 = execute_command(current_state, scope_cmd, principal, occurred_at=now)
         if not res1.decision.allowed:
@@ -529,6 +530,7 @@ async def simulate_signal(principal: Principal = Depends(get_current_principal))
                 current_state,
                 model_id=signal_res.model_version,
                 ingredient_lot=signal_res.ingredient_lot,
+                pathogen=signal_res.pathogen,
             ),
         }
 

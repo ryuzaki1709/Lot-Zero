@@ -5,7 +5,7 @@
 
 [![Live Service](https://img.shields.io/badge/Google_Cloud_Run-Live_Demo-4285F4?style=for-the-badge&logo=googlecloud&logoColor=white)](https://lot-zero-1051797806634.us-central1.run.app)
 [![Gemini 3.5](https://img.shields.io/badge/Vertex_AI-Gemini_3.5_Flash-34A853?style=for-the-badge&logo=googlegemini&logoColor=white)](https://cloud.google.com/vertex-ai)
-[![Tests](https://img.shields.io/badge/Pytest-132_Passed-00C853?style=for-the-badge&logo=pytest&logoColor=white)](apps/api/tests/)
+[![Tests](https://img.shields.io/badge/Pytest-135_Passed-00C853?style=for-the-badge&logo=pytest&logoColor=white)](apps/api/tests/)
 
 **Live Production Deployment**: [**https://lot-zero-1051797806634.us-central1.run.app**](https://lot-zero-1051797806634.us-central1.run.app)
 
@@ -127,12 +127,12 @@ python scripts/verify_cloud_deploy.py https://lot-zero-1051797806634.us-central1
 
 ## 5. Automated Test Suite
 
-Run the full pytest suite (132 tests covering contracts, SQLite optimistic concurrency, replay equivalence, tenant isolation, dual-signature release, state machine legality, live GenAI grounding, deterministic traversal with unresolved edge propagation, reducer authenticity with required quantities, and audit tamper detection):
+Run the full pytest suite (135 tests covering contracts, SQLite optimistic concurrency, replay equivalence, tenant isolation, dual-signature release, state machine legality, live GenAI grounding, deterministic traversal with unresolved edge propagation, reducer authenticity with required quantities, and audit tamper detection):
 
 ```bash
 cd apps/api
 pytest tests/
 ```
 ```
-======================= 132 passed, 1 warning in 3.19s =======================
+======================= 135 passed, 1 warning in 3.10s =======================
 ```

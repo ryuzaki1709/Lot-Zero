@@ -1,10 +1,11 @@
 import os
+import sys
 import time
 import json
 import urllib.request
 from playwright.sync_api import sync_playwright
 
-target_url = 'http://127.0.0.1:8000'
+target_url = sys.argv[1] if len(sys.argv) > 1 else 'https://lot-zero-1051797806634.us-central1.run.app'
 screenshots_dir = 'C:/Users/sujan reddy/Documents/john/lot-zero/screenshots'
 os.makedirs(screenshots_dir, exist_ok=True)
 

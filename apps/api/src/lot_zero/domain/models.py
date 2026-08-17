@@ -116,6 +116,7 @@ class AffectedScope(DomainRecord):
     affected_quantity: NonNegativeQuantity
     created_at: datetime
     ingredient_lot: Identifier | None = None
+    pathogen: str | None = None
 
 
 class ImpactRecord(DomainRecord):

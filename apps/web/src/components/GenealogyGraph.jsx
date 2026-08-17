@@ -1,7 +1,23 @@
 import React from 'react';
 
 export function GenealogyGraph({ genealogy, metrics, phase, isQaApproved }) {
-  if (!genealogy || !Array.isArray(genealogy.nodes)) return null;
+  if (!genealogy || !Array.isArray(genealogy.nodes) || genealogy.nodes.length === 0) {
+    return (
+      <section className="section">
+        <div className="section-head">
+          <div>
+            <h2 className="section-title">Traceability</h2>
+            <p className="section-desc">
+              Bidirectional genealogy from supplier intake to finished goods. Awaiting safety signal.
+            </p>
+          </div>
+        </div>
+        <div className="card-panel" style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13.5px' }}>
+          No active recall scope. Simulate a safety signal to generate the production genealogy DAG.
+        </div>
+      </section>
+    );
+  }
 
   const isHoldActive = [
     'provisional_containment',

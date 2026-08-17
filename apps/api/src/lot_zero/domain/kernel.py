@@ -82,6 +82,7 @@ def execute_command(
             affected_quantity=command.affected_quantity,
             evidence_record_ids=command.evidence_record_ids,
             ingredient_lot=command.ingredient_lot,
+            pathogen=command.pathogen,
             kind="scope_proposed",
             occurred_at=now,
         )

@@ -233,3 +233,89 @@ async def test_simulate_signal_extraction_drives_genealogy_and_impact():
             assert data["projection"]["metrics"]["affected_inventory_quantity"] == 0.0
             assert data["projection"]["metrics"]["provisional_hold_quantity"] == 0.0
 
+
+@pytest.mark.anyio
+async def test_simulate_signal_extraction_drives_pathogen_hazard():
+    """Drive simulate-signal with an extraction returning a custom pathogen and assert the graph's hazard field follows it."""
+    from unittest.mock import patch
+    import httpx
+    from lot_zero.app import app
+    from lot_zero.domain.gemini_agent import ExtractedSignal
+
+    custom_pathogen = "Listeria monocytogenes (Line 4 Swab)"
+    custom_signal = ExtractedSignal(
+        source_id="LAB-SIGNAL-20260814-001",
+        ingredient_lot="ING-4417",
+        pathogen=custom_pathogen,
+        spans=(),
+        recommended_scope_records=(),
+        extracted_at=NOW,
+        model_version="gemini-3.5-flash (Mocked Extraction)",
+        doc_hash="a" * 64,
+        raw_text="Document text for Listeria monocytogenes",
+    )
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        # Reset incident first
+        res_reset = await client.post(
+            "/api/evaluation/reset",
+            headers={"X-API-Key": "key-recall-coord-01"},
+        )
+        assert res_reset.status_code == 200
+
+        # Simulate signal with mocked extraction returning custom_pathogen
+        with patch("lot_zero.app.analyze_safety_signal", return_value=custom_signal):
+            res_sim = await client.post(
+                "/api/evaluation/simulate-signal",
+                headers={"X-API-Key": "key-recall-coord-01"},
+            )
+            assert res_sim.status_code == 200
+            data = res_sim.json()
+
+            # 1. Extraction result
+            assert data["signal"]["pathogen"] == custom_pathogen
+
+            # 2. Genealogy graph projection hazard must follow custom_pathogen
+            nodes = data["projection"]["genealogy"]["nodes"]
+            ingredient_nodes = [n for n in nodes if n["type"] == "ingredient"]
+            assert len(ingredient_nodes) == 1
+            assert ingredient_nodes[0]["hazard"] == custom_pathogen
+
+
+def test_build_incident_projection_empty_state_renders_no_ingredient_node():
+    """Verify that when no scope exists on state, no incident nodes are drawn."""
+    initial_state = make_test_state()
+    assert len(initial_state.scopes) == 0
+
+    proj = build_incident_projection(initial_state)
+    assert proj["genealogy"]["nodes"] == []
+    assert proj["genealogy"]["edges"] == []
+    assert proj["genealogy"]["unresolved_edges"] == []
+
+
+def test_build_incident_projection_scope_missing_ingredient_lot_raises_invariant_violation():
+    """Verify that if a scope exists on state but carries no ingredient_lot, projection raises an InvariantViolation."""
+    from lot_zero.domain.models import AffectedScope
+
+    initial_state = make_test_state()
+    scope_without_lot = AffectedScope(
+        scope_id="SCOPE-NO-LOT-01",
+        tenant_id=TENANT_ID,
+        case_id=CASE_ID,
+        case_version=1,
+        scope_version=1,
+        status="proposed",
+        affected_record_ids=("FP-100-L240814-A",),
+        evidence_record_ids=("LAB-01",),
+        affected_quantity=Decimal("100"),
+        created_at=NOW,
+        ingredient_lot=None,  # Missing ingredient lot on an existing scope
+    )
+    state_corrupted_scope = initial_state.model_copy(update={"scopes": (scope_without_lot,)})
+
+    with pytest.raises(InvariantViolation, match="carries no ingredient_lot"):
+        build_incident_projection(state_corrupted_scope)
+
+
