@@ -492,7 +492,6 @@ export function App() {
             approvals={approvals}
             closureGate={closureGate}
             containmentActions={projection?.containment_actions}
-            acknowledgements={acks}
           />
         </section>
 

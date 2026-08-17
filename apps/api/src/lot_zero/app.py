@@ -626,6 +626,9 @@ async def dispatch_outbox(principal: Principal = Depends(get_current_principal))
                 tenant_id=principal.tenant_id,
             )
 
+        current_case = current_state.case.model_copy(update={"phase": "ack_monitoring"})
+        current_state = current_state.model_copy(update={"case": current_case})
+
         await broadcast_state(current_state)
         return {"status": "outbox_dispatched", "projection": build_incident_projection(current_state)}
 
