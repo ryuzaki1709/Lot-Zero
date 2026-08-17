@@ -158,6 +158,33 @@ canvas {
   flex-shrink: 1;
 }
 
+@media (max-width: 768px) {
+  .topbar-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .topbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    max-width: 100%;
+    padding-bottom: 2px;
+  }
+  .topbar-actions::-webkit-scrollbar {
+    display: none;
+  }
+  .topbar-actions select,
+  .topbar-actions .btn {
+    flex-shrink: 0;
+  }
+}
+
 /* ---------- 5. Stepper ------------------------------------------------------
    Six stages never fit a phone. Make it an honest horizontal rail: snap
    points, no scrollbar chrome, and an edge fade so it reads as scrollable. */

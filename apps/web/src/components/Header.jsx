@@ -113,7 +113,7 @@ export function Header({
             </button>
             <button className="btn btn-ghost" onClick={() => setShowResetConfirm(true)} disabled={loading} title="Reset to clean baseline">
               <RefreshCw size={14} />
-              <span className="hide-mobile">Reset State</span>
+              <span>Reset State</span>
             </button>
             <button
               className={`btn btn-primary ${!hasSignal && !loading ? 'btn-pulse' : ''}`}
