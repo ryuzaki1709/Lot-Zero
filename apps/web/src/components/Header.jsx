@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { RefreshCw, BookOpen, Download, Sparkles } from 'lucide-react';
+import { ResetConfirmModal } from './ResetConfirmModal';
 
 /** Animates a number toward its target over ~600ms whenever it changes. */
 function useCountUp(target) {
@@ -48,6 +49,7 @@ export function Header({
   const acks = projection?.acknowledgements || [];
   const confirmedAcks = acks.filter((a) => a.status === 'verified').length;
   const totalAcks = acks.length;
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   const unitsHeld =
     projection?.metrics?.provisional_hold_quantity ??
@@ -109,8 +111,9 @@ export function Header({
               <BookOpen size={14} />
               <span className="hide-mobile">Docs</span>
             </button>
-            <button className="btn btn-ghost" onClick={onReset} disabled={loading} title="Reset to clean baseline">
+            <button className="btn btn-ghost" onClick={() => setShowResetConfirm(true)} disabled={loading} title="Reset to clean baseline">
               <RefreshCw size={14} />
+              <span className="hide-mobile">Reset State</span>
             </button>
             <button
               className={`btn btn-primary ${!hasSignal && !loading ? 'btn-pulse' : ''}`}
@@ -191,6 +194,13 @@ export function Header({
           </div>
         </div>
       </div>
+
+      <ResetConfirmModal
+        isOpen={showResetConfirm}
+        onClose={() => setShowResetConfirm(false)}
+        onConfirm={onReset}
+        loading={loading}
+      />
     </>
   );
 }
