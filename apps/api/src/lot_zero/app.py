@@ -48,7 +48,7 @@ from .domain.gemini_agent import analyze_safety_signal
 from .domain.kernel import ContainmentExecutor, execute_command
 from .domain.models import AffectedScope, ContainmentAction, IncidentState, NotificationPacket, RecallCase
 from .domain.projections import CaseSummaryProjection, FilterType, query_case_summaries
-from .domain.selectors import build_incident_projection
+from .domain.selectors import RAW_TEXT, build_incident_projection
 
 NOW = datetime(2026, 8, 14, 12, 0, 0, tzinfo=UTC)
 TENANT_ID = "EVAL-TENANT-01"
@@ -331,7 +331,7 @@ async def simulate_signal(principal: Principal = Depends(get_current_principal))
     async with state_lock:
         # 1. Analyze signal via Gemini Agent
         signal_res = analyze_safety_signal(
-            "Lab report Salmonella positive in ingredient lot ING-4417",
+            RAW_TEXT,
             case_id=current_state.case.case_id,
             tenant_id=TENANT_ID,
         )
