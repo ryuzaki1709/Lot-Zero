@@ -22,9 +22,9 @@ from .commands import (
     RecordAcknowledgementCommand,
     RequestClosureCommand,
     RequestContainmentCommand,
+    RequestNotificationCommand,
     SendNotificationCommand,
 )
-
 from .errors import InvariantViolation
 from .events import (
     AcknowledgementRecordedEvent,
@@ -36,10 +36,10 @@ from .events import (
     ScopeProposedEvent,
     TransitionEvent,
 )
-from .transitions import _ALLOWED_PRIMARY_TARGETS
 from .identifiers import ActionIntent, action_key
 from .models import ApprovalDecision, ContainmentAction, IncidentState
 from .reducer import apply_event
+from .transitions import _ALLOWED_PRIMARY_TARGETS
 
 
 class CommandExecutionResult:
@@ -70,97 +70,111 @@ def execute_command(
     events: list[object] = []
 
     if isinstance(command, ProposeScopeCommand):
-        event = ScopeProposedEvent(
-            event_id=f"EVT-{command.command_id}",
-            tenant_id=command.tenant_id,
-            case_id=command.case_id,
-            actor_id=command.actor_id,
-            case_version=command.case_version,
-            scope_id=command.scope_id,
-            scope_version=command.scope_version,
-            affected_record_ids=command.affected_record_ids,
-            affected_quantity=command.affected_quantity,
-            evidence_record_ids=command.evidence_record_ids,
-            ingredient_lot=command.ingredient_lot,
-            pathogen=command.pathogen,
-            kind="scope_proposed",
-            occurred_at=now,
+        events.append(
+            ScopeProposedEvent(
+                event_id=f"EVT-{command.command_id}",
+                tenant_id=command.tenant_id,
+                case_id=command.case_id,
+                actor_id=command.actor_id,
+                case_version=command.case_version,
+                scope_id=command.scope_id,
+                scope_version=command.scope_version,
+                affected_record_ids=command.affected_record_ids,
+                affected_quantity=command.affected_quantity,
+                evidence_record_ids=command.evidence_record_ids,
+                ingredient_lot=command.ingredient_lot,
+                pathogen=command.pathogen,
+                kind="scope_proposed",
+                occurred_at=now,
+            )
         )
-        events.append(event)
 
     elif isinstance(command, RequestContainmentCommand):
-        event = ContainmentRequestedEvent(
-            event_id=f"EVT-{command.command_id}",
-            tenant_id=command.tenant_id,
-            case_id=command.case_id,
-            actor_id=command.actor_id,
-            case_version=command.case_version,
-            scope_id=command.scope_id,
-            scope_version=command.scope_version,
-            action_id=f"ACT-{command.command_id}",
-            policy_version=command.policy_version,
-            target_record_ids=command.target_record_ids,
-            quantity=command.quantity,
-            kind="containment_requested",
-            occurred_at=now,
+        events.append(
+            ContainmentRequestedEvent(
+                event_id=f"EVT-{command.command_id}",
+                tenant_id=command.tenant_id,
+                case_id=command.case_id,
+                actor_id=command.actor_id,
+                case_version=command.case_version,
+                scope_id=command.scope_id,
+                scope_version=command.scope_version,
+                action_id=f"ACT-{command.command_id}",
+                policy_version=command.policy_version,
+                target_record_ids=command.target_record_ids,
+                quantity=command.quantity,
+                kind="containment_requested",
+                occurred_at=now,
+            )
         )
-        events.append(event)
 
-    elif isinstance(command, SendNotificationCommand):
-        event = NotificationRequestedEvent(
-            event_id=f"EVT-{command.command_id}",
-            tenant_id=command.tenant_id,
-            case_id=command.case_id,
-            actor_id=command.actor_id,
-            case_version=command.case_version,
-            scope_id=command.scope_id,
-            scope_version=command.scope_version,
-            packet_id=command.packet_id,
-            payload_version=command.payload_version,
-            payload_hash=command.payload_hash,
-            policy_version=command.policy_version,
-            recipient_ids=command.recipient_ids,
-            kind="notification_requested",
-            occurred_at=now,
+    elif isinstance(command, (RequestNotificationCommand, SendNotificationCommand)):
+        events.append(
+            NotificationRequestedEvent(
+                event_id=f"EVT-{command.command_id}",
+                tenant_id=command.tenant_id,
+                case_id=command.case_id,
+                actor_id=command.actor_id,
+                case_version=command.case_version,
+                scope_id=command.scope_id,
+                scope_version=command.scope_version,
+                packet_id=command.packet_id,
+                payload_version=command.payload_version,
+                payload_hash=command.payload_hash,
+                policy_version=command.policy_version,
+                recipient_ids=command.recipient_ids,
+                kind="notification_requested",
+                occurred_at=now,
+            )
         )
-        events.append(event)
 
     elif isinstance(command, RecordAcknowledgementCommand):
-        event = AcknowledgementRecordedEvent(
-            event_id=f"EVT-{command.command_id}",
-            tenant_id=command.tenant_id,
-            case_id=command.case_id,
-            actor_id=command.actor_id,
-            case_version=command.case_version,
-            packet_id=command.packet_id,
-            acknowledgement_id=command.acknowledgement_id,
-            recipient_id=command.recipient_id,
-            acknowledgement_status=command.acknowledgement_status,
-            caller_id=command.caller_id,
-            recipient_contact=command.recipient_contact,
-            recipient_phone=command.recipient_phone,
-            attestation_notes=command.attestation_notes,
-            attestation_hash=command.attestation_hash,
-            call_timestamp=command.call_timestamp,
-            kind="acknowledgement_recorded",
-            occurred_at=now,
+        events.append(
+            AcknowledgementRecordedEvent(
+                event_id=f"EVT-{command.command_id}",
+                tenant_id=command.tenant_id,
+                case_id=command.case_id,
+                actor_id=command.actor_id,
+                case_version=command.case_version,
+                packet_id=command.packet_id,
+                acknowledgement_id=command.acknowledgement_id,
+                recipient_id=command.recipient_id,
+                acknowledgement_status=command.acknowledgement_status,
+                caller_id=command.caller_id,
+                recipient_contact=command.recipient_contact,
+                recipient_phone=command.recipient_phone,
+                attestation_notes=command.attestation_notes,
+                attestation_hash=command.attestation_hash,
+                call_timestamp=command.call_timestamp,
+                kind="acknowledgement_recorded",
+                occurred_at=now,
+            )
         )
-        events.append(event)
 
     elif isinstance(command, RequestClosureCommand):
-        event = ClosureRequestedEvent(
-            event_id=f"EVT-{command.command_id}",
-            tenant_id=command.tenant_id,
-            case_id=command.case_id,
-            actor_id=command.actor_id,
-            case_version=command.case_version,
-            closure_id=command.closure_id,
-            policy_version=command.policy_version,
-            outstanding_acknowledgement_ids=command.outstanding_acknowledgement_ids,
-            kind="closure_requested",
-            occurred_at=now,
+        req_stream_v = state.case.case_version + 1
+        events.append(
+            ClosureRequestedEvent(
+                event_id=f"EVT-{command.command_id}",
+                tenant_id=command.tenant_id,
+                case_id=command.case_id,
+                actor_id=principal.principal_id,
+                case_version=command.case_version,
+                request_id=command.request_id,
+                requester_principal_id=principal.principal_id,
+                requested_scope_version=command.scope_version
+                if command.scope_version > 0
+                else (state.scopes[0].scope_version if state.scopes else 1),
+                requested_policy_version=command.policy_version,
+                closure_id=command.closure_id,
+                policy_version=command.policy_version,
+                outstanding_acknowledgement_ids=command.outstanding_acknowledgement_ids,
+                evidence_record_ids=command.evidence_record_ids,
+                request_stream_version=req_stream_v,
+                kind="closure_requested",
+                occurred_at=now,
+            )
         )
-        events.append(event)
 
     elif isinstance(command, AdvancePhaseCommand):
         expected_target = _ALLOWED_PRIMARY_TARGETS.get(state.case.phase)
@@ -173,16 +187,17 @@ def execute_command(
                     f"Cannot advance phase from '{state.case.phase}' to '{command.target_phase}'. Allowed target is '{expected_target}'.",
                 ),
             )
-        event = TransitionEvent(
-            event_id=f"EVT-{command.command_id}",
-            tenant_id=command.tenant_id,
-            case_id=command.case_id,
-            case_version=command.case_version,
-            kind="advance",
-            target_phase=command.target_phase,
-            occurred_at=now,
+        events.append(
+            TransitionEvent(
+                event_id=f"EVT-{command.command_id}",
+                tenant_id=command.tenant_id,
+                case_id=command.case_id,
+                case_version=command.case_version,
+                kind="advance",
+                target_phase=command.target_phase,
+                occurred_at=now,
+            )
         )
-        events.append(event)
 
     elif isinstance(command, ApproveScopeCommand):
         approval = ApprovalDecision(
@@ -237,16 +252,22 @@ def execute_command(
             approver_id=principal.principal_id,
             approver_role=principal.roles[0] if principal.roles else None,
             case_version=command.case_version,
-            boundary_version="BOUND-01",
+            boundary_version=command.payload_hash,
+            packet_id=command.packet_id,
             scope_id=command.scope_id,
             scope_version=command.scope_version,
             payload_version=command.payload_version,
+            payload_hash=command.payload_hash,
             policy_version=command.policy_version,
             decided_at=now,
         )
         events.append(approval)
 
     elif isinstance(command, ApproveClosureCommand):
+        matching_req = next(
+            (r for r in state.closure_requests if r.request_id == command.request_id), None
+        )
+        requester_id = matching_req.requester_principal_id if matching_req else command.actor_id
         approval = ApprovalDecision(
             approval_id=command.approval_id,
             tenant_id=command.tenant_id,
@@ -254,7 +275,7 @@ def execute_command(
             approval_type="closure",
             decision="approved",
             rationale=command.rationale,
-            requester_id=command.actor_id,
+            requester_id=requester_id,
             approver_id=principal.principal_id,
             approver_role=principal.roles[0] if principal.roles else None,
             case_version=command.case_version,
@@ -305,7 +326,6 @@ def execute_command(
                             occurred_at=now,
                         )
                     )
-
 
     # Fold all new events over current state
     new_state = state

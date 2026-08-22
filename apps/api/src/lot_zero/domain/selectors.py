@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 from typing import Any
+
 from ..fixtures.loader import load_fixture
 from .errors import InvariantViolation
 from .models import IncidentState
@@ -45,8 +46,13 @@ def _make_citation_span(needle: str, claim: str) -> dict[str, Any]:
 # Verified citation spans derived from RAW_TEXT
 CITATION_SPANS = [
     _make_citation_span("Raw Ingredient Lot ING-4417 (Organic Wheat Flour)", "Contaminated Lot"),
-    _make_citation_span("POSITIVE for Salmonella enterica serovar Typhimurium", "Biohazard Finding"),
-    _make_citation_span("Immediate scope isolation of all finished batches utilizing Lot ING-4417", "Containment Scope"),
+    _make_citation_span(
+        "POSITIVE for Salmonella enterica serovar Typhimurium", "Biohazard Finding"
+    ),
+    _make_citation_span(
+        "Immediate scope isolation of all finished batches utilizing Lot ING-4417",
+        "Containment Scope",
+    ),
 ]
 
 
@@ -57,13 +63,18 @@ def build_incident_projection(
     ingredient_lot: str | None = None,
     pathogen: str | None = None,
 ) -> dict[str, Any]:
-    """Project strict incident state into the record-backed wire schema."""
     case = state.case
+    is_qa_approved = any(
+        a.approval_type == "containment" and a.decision == "approved" for a in state.approvals
+    )
+    standing_policy = "AUTH-HOLD-01" if is_qa_approved else "EVAL-HOLD-01"
 
     # 1. Header & Verified Source Document Digest
     header = {
         "case_id": case.case_id,
+        "case_version": case.case_version,
         "phase": case.phase,
+        "standing_policy_version": standing_policy,
         "environment_notice": "Evaluation tenant · synthetic records · no real outreach",
         "record_ids": list(case.source_record_ids),
         "source_doc_hash": DOC_HASH,
@@ -170,9 +181,11 @@ def build_incident_projection(
             "scope_version": p.scope_version,
             "payload_version": p.payload_version,
             "payload_hash": p.payload_hash,
+            "policy_version": getattr(p, "policy_version", "EVAL-HOLD-01"),
             "status": p.status,
             "recipient_ids": list(p.recipient_ids),
             "created_at": p.created_at.isoformat(),
+            "requester_id": p.requester_id,
         }
         for p in state.notification_packets
     ]
@@ -195,12 +208,18 @@ def build_incident_projection(
     ]
 
     # 8. Outstanding acks / Closure Gate
-    outstanding_acks = [ack.acknowledgement_id for ack in state.acknowledgements if ack.status == "outstanding"]
+    outstanding_acks = [
+        ack.acknowledgement_id for ack in state.acknowledgements if ack.status == "outstanding"
+    ]
     verified_count = len([ack for ack in state.acknowledgements if ack.status == "verified"])
     total_recipients = len(state.acknowledgements)
-    
+
+    active_closure_req = next((r for r in state.closure_requests if not r.is_consumed), None)
+
     closure_gate = {
-        "status": "closed" if case.phase == "closed" else ("blocked" if outstanding_acks else "ready_for_closure"),
+        "status": "closed"
+        if case.phase == "closed"
+        else ("blocked" if outstanding_acks else "ready_for_closure"),
         "is_blocked": len(outstanding_acks) > 0 and case.phase != "closed",
         "blocked_reason": (
             f"Awaiting verified consignment acknowledgement from: {', '.join(outstanding_acks)}"
@@ -211,17 +230,21 @@ def build_incident_projection(
         "verified_count": verified_count,
         "total_recipients": total_recipients,
         "record_ids": outstanding_acks if outstanding_acks else ["CLOSURE-GATE-EVAL-01"],
+        "active_request_id": active_closure_req.request_id if active_closure_req else None,
+        "has_active_request": active_closure_req is not None,
     }
 
     fixture = load_fixture("evaluation-tenant-v1")
 
     # 9. Strict Production Graph & Reconciled Inventory Metrics (NO FABRICATION)
-    shift_batches = [
+    shift_batches: list[dict[str, Any]] = [
         {
             "id": lot.lot_id,
             "qty": float(lot.quantity),
             "ingredient": lot.ingredient_lot,
-            "line": f"Packaging Line {lot.lot_id.split('-')[-1]}" if "-" in lot.lot_id else "Packaging Line",
+            "line": f"Packaging Line {lot.lot_id.split('-')[-1]}"
+            if "-" in lot.lot_id
+            else "Packaging Line",
         }
         for lot in fixture.operations.affected_finished_lots
     ] + [
@@ -232,18 +255,21 @@ def build_incident_projection(
             "line": "Packaging Line 1",
         }
     ]
-    
+
     # State-derived affected & held batches without fallbacks
     affected_batch_ids: set[str] = set()
     for s in state.scopes:
         affected_batch_ids.update(s.affected_record_ids)
-    
+
     held_batch_ids: set[str] = set()
     is_inventory_released = False
     for a in state.containment_actions:
         if a.action_type == "release_hold" and a.status == "succeeded":
             is_inventory_released = True
-        elif a.status in ("planned", "in_flight", "succeeded") and a.action_type == "provisional_hold":
+        elif (
+            a.status in ("planned", "in_flight", "succeeded")
+            and a.action_type == "provisional_hold"
+        ):
             held_batch_ids.update(a.target_record_ids)
 
     if is_inventory_released:
@@ -251,19 +277,35 @@ def build_incident_projection(
 
     affected_batches = [b for b in shift_batches if b["id"] in affected_batch_ids]
     unaffected_batches = [b for b in shift_batches if b["id"] not in affected_batch_ids]
-    
-    derived_affected_qty = sum(b["qty"] for b in affected_batches)
-    derived_held_qty = sum(b["qty"] for b in shift_batches if b["id"] in held_batch_ids)
-    derived_unaffected_held = sum(b["qty"] for b in unaffected_batches if b["id"] in held_batch_ids)
-    derived_unaffected_cleared = sum(b["qty"] for b in unaffected_batches if b["id"] not in held_batch_ids)
-    
+
+    derived_affected_qty = 0.0
+    for b in affected_batches:
+        derived_affected_qty += float(b["qty"])
+
+    derived_held_qty = 0.0
+    for b in shift_batches:
+        if b["id"] in held_batch_ids:
+            derived_held_qty += float(b["qty"])
+
+    derived_unaffected_held = 0.0
+    for b in unaffected_batches:
+        if b["id"] in held_batch_ids:
+            derived_unaffected_held += float(b["qty"])
+
+    derived_unaffected_cleared = 0.0
+    for b in unaffected_batches:
+        if b["id"] not in held_batch_ids:
+            derived_unaffected_cleared += float(b["qty"])
+
     # Reconciled inventory balance:
     # On-site facility inventory held = 130.0, Field/in-transit held = 70.0 (Total = 200.0)
     shipped_qty = float(fixture.operations.shipped_quantity)
     metrics = {
         "affected_inventory_quantity": derived_affected_qty,
         "provisional_hold_quantity": derived_held_qty,
-        "on_site_warehouse_held": float(derived_held_qty - shipped_qty) if derived_held_qty > 0 else 0.0,
+        "on_site_warehouse_held": float(derived_held_qty - shipped_qty)
+        if derived_held_qty > 0
+        else 0.0,
         "in_transit_consignee_held": shipped_qty if derived_held_qty > 0 else 0.0,
         "unaffected_hold_quantity": derived_unaffected_held,
         "unaffected_cleared_quantity": derived_unaffected_cleared,
@@ -283,7 +325,7 @@ def build_incident_projection(
         and a.boundary_version != "EVAL-HOLD-01-EXT"
         for a in state.approvals
     )
-    
+
     def get_batch_hold_status(batch_id: str) -> str:
         if is_inventory_released:
             return "released_negative_retest"
@@ -292,6 +334,7 @@ def build_incident_projection(
         return "clear"
 
     # 10. Bidirectional Genealogy DAG with true release state & unresolved boundaries
+    genealogy: dict[str, Any]
     if not state.scopes and not ingredient_lot:
         genealogy = {
             "nodes": [],
@@ -300,12 +343,15 @@ def build_incident_projection(
         }
         target_ingredient = None
         target_pathogen = None
+
     else:
         if state.scopes:
             target_ingredient = ingredient_lot or state.scopes[0].ingredient_lot
             target_pathogen = pathogen or getattr(state.scopes[0], "pathogen", None)
             if not target_ingredient:
-                raise InvariantViolation(f"Scope '{state.scopes[0].scope_id}' exists on IncidentState but carries no ingredient_lot")
+                raise InvariantViolation(
+                    f"Scope '{state.scopes[0].scope_id}' exists on IncidentState but carries no ingredient_lot"
+                )
         else:
             target_ingredient = ingredient_lot
             target_pathogen = pathogen
@@ -337,34 +383,44 @@ def build_incident_projection(
 
         for lot in fixture.operations.affected_finished_lots:
             suffix = lot.lot_id.split("-")[-1]
-            nodes.append({
-                "id": lot.lot_id,
-                "label": f"Finished Cereal Box 500g (Batch {suffix})",
-                "type": "finished_product",
-                "quantity": lot.quantity,
-                "hold_status": get_batch_hold_status(lot.lot_id),
-                "line": f"Packaging Line {suffix}",
-            })
+            nodes.append(
+                {
+                    "id": lot.lot_id,
+                    "label": f"Finished Cereal Box 500g (Batch {suffix})",
+                    "type": "finished_product",
+                    "quantity": lot.quantity,
+                    "hold_status": get_batch_hold_status(lot.lot_id),
+                    "line": f"Packaging Line {suffix}",
+                }
+            )
 
         adj = fixture.operations.adjacent_unaffected_batch
-        nodes.append({
-            "id": adj.lot_id,
-            "label": f"Adjacent Batch {adj.lot_id} (Lot {adj.ingredient_lot})",
-            "type": "unaffected_batch",
-            "quantity": adj.quantity,
-            "hold_status": "clear",
-            "note": "Clean wheat batch from Silo 2 (Proven Negative Control · 0 Held)",
-        })
+        nodes.append(
+            {
+                "id": adj.lot_id,
+                "label": f"Adjacent Batch {adj.lot_id} (Lot {adj.ingredient_lot})",
+                "type": "unaffected_batch",
+                "quantity": adj.quantity,
+                "hold_status": "clear",
+                "note": "Clean wheat batch from Silo 2 (Proven Negative Control · 0 Held)",
+            }
+        )
 
         edges = [
-            {"from": supplier_id, "to": target_ingredient, "label": f"Upstream Intake {intake_mass}"},
+            {
+                "from": supplier_id,
+                "to": target_ingredient,
+                "label": f"Upstream Intake {intake_mass}",
+            },
         ]
         for lot in fixture.operations.affected_finished_lots:
-            edges.append({
-                "from": lot.ingredient_lot,
-                "to": lot.lot_id,
-                "label": f"Batch Allocation {lot.quantity} units",
-            })
+            edges.append(
+                {
+                    "from": lot.ingredient_lot,
+                    "to": lot.lot_id,
+                    "label": f"Batch Allocation {lot.quantity} units",
+                }
+            )
 
         unresolved_edges = [
             {
@@ -382,17 +438,17 @@ def build_incident_projection(
             "unresolved_edges": unresolved_edges,
         }
 
-    # 11. Immutable Ledger Entries List (Projected for UI)
+    # 11. Cryptographic Ledger Entries List (Projected for UI)
     ledger_list = [
         {
-            "sequence": l.sequence,
-            "entry_type": l.entry_type,
-            "record_ids": list(l.record_ids),
-            "payload_hash": l.payload_hash,
-            "prior_entry_hash": l.prior_entry_hash,
-            "created_at": l.created_at.isoformat(),
+            "sequence": entry.sequence,
+            "entry_type": entry.entry_type,
+            "record_ids": list(entry.record_ids),
+            "payload_hash": entry.payload_hash,
+            "prior_entry_hash": entry.prior_entry_hash,
+            "created_at": entry.created_at.isoformat(),
         }
-        for l in state.ledger
+        for entry in state.ledger
     ]
 
     signal_info = {
@@ -402,8 +458,12 @@ def build_incident_projection(
         "doc_hash": DOC_HASH,
         "received_at": "2026-08-14T12:00:00Z",
         "lab_name": "Apex Micro Quality Labs",
-        "tested_ingredient": f"Organic Wheat Flour Lot {target_ingredient}" if target_ingredient else "Organic Wheat Flour",
-        "pathogen": target_pathogen if target_pathogen else "Biological Pathogen (Positive in 25g sample)",
+        "tested_ingredient": f"Organic Wheat Flour Lot {target_ingredient}"
+        if target_ingredient
+        else "Organic Wheat Flour",
+        "pathogen": target_pathogen
+        if target_pathogen
+        else "Biological Pathogen (Positive in 25g sample)",
         "cfu_count": "2.4 x 10^3 CFU/g",
         "raw_text": RAW_TEXT,
         "citation_spans": CITATION_SPANS,
@@ -415,6 +475,20 @@ def build_incident_projection(
         "metrics": metrics,
         "packets": packets_list,
         "closure_gate": closure_gate,
+        "closure_requests": [
+            {
+                "request_id": r.request_id,
+                "requester_id": r.requester_principal_id,
+                "closure_id": r.closure_id,
+                "policy_version": r.requested_policy_version,
+                "scope_version": r.requested_scope_version,
+                "request_stream_version": r.request_stream_version,
+                "is_consumed": r.is_consumed,
+                "status": "consumed" if r.is_consumed else "pending",
+                "created_at": r.requested_at.isoformat(),
+            }
+            for r in state.closure_requests
+        ],
         "ledger_count": len(state.ledger),
         "ledger": ledger_list,
         "approvals": approvals_list,

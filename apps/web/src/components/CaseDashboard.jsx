@@ -1,43 +1,106 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { RefreshCw } from 'lucide-react';
+import { buildRequestHeaders } from '../utils/authConfig';
+import {
+  deriveSummaryFromProjection,
+  matchesFilter,
+  mergeCasesWithProjection,
+} from '../utils/dashboardSync.js';
 
 const API_BASE = '';
+
 
 export function CaseDashboard({
   currentCaseId,
   onSelectCase,
   activePhase,
   apiKey,
+  evaluationMode = false,
+  refreshTrigger = 0,
+  currentProjection = null,
 }) {
   const [activeTab, setActiveTab] = useState('all');
-  const [cases, setCases] = useState([]);
+  const [cases, setCases] = useState(() =>
+    currentProjection ? mergeCasesWithProjection([], currentProjection, 'all') : []
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  const abortControllerRef = useRef(null);
+  const latestRequestIdRef = useRef(0);
+
   const fetchCases = async (filter) => {
-    if (!apiKey) return;
+    const authHeaders = buildRequestHeaders(apiKey, evaluationMode);
+    if (!authHeaders['X-API-Key']) return;
+
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
+    const reqId = ++latestRequestIdRef.current;
     setLoading(true);
     setError(null);
+
     try {
       const res = await fetch(`${API_BASE}/api/projections/cases?filter=${filter}`, {
-        headers: { 'X-API-Key': apiKey },
+        headers: authHeaders,
+        signal: abortController.signal,
       });
+
+      if (reqId !== latestRequestIdRef.current) return;
+
       if (res.ok) {
         const data = await res.json();
-        setCases(data);
+        if (reqId !== latestRequestIdRef.current) return;
+
+        const merged = mergeCasesWithProjection(data, currentProjection, filter);
+        setCases(merged);
       } else {
         setError(`Failed to fetch cases: ${res.statusText}`);
       }
     } catch (err) {
-      setError(err.message || 'Error connecting to projection service');
+      if (err.name === 'AbortError') {
+        return;
+      }
+      if (reqId === latestRequestIdRef.current) {
+        setError(err.message || 'Error connecting to projection service');
+      }
     } finally {
-      setLoading(false);
+      if (reqId === latestRequestIdRef.current) {
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
+    if (currentProjection) {
+      const projSummary = deriveSummaryFromProjection(currentProjection);
+      if (projSummary) {
+        setCases((prev) => {
+          const existingIdx = prev.findIndex((c) => c.case_id === projSummary.case_id);
+          let updated;
+          if (existingIdx >= 0) {
+            updated = [...prev];
+            updated[existingIdx] = projSummary;
+          } else {
+            updated = [projSummary, ...prev];
+          }
+          return updated.filter((c) => matchesFilter(c, activeTab));
+        });
+      }
+    }
     fetchCases(activeTab);
-  }, [activeTab, apiKey]);
+  }, [activeTab, apiKey, evaluationMode, refreshTrigger, currentProjection]);
+
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
 
   return (
     <section className="section" style={{ marginBottom: 0 }}>
@@ -45,7 +108,7 @@ export function CaseDashboard({
         <div>
           <h2 className="section-title">Incidents</h2>
           <p className="section-desc">
-            Read models materialized from the append-only event stream, scoped to this tenant.
+            Read models materialized from the append-oriented event stream, scoped to this tenant.
           </p>
         </div>
         <button className="btn btn-ghost" onClick={() => fetchCases(activeTab)} title="Re-query projections">
@@ -73,7 +136,7 @@ export function CaseDashboard({
       </div>
 
       {/* Case cards */}
-      {loading ? (
+      {loading && cases.length === 0 ? (
         <div style={{ padding: '24px 0', color: 'var(--text-muted)', fontSize: '13px' }}>
           Loading projections…
         </div>
@@ -157,7 +220,7 @@ export function CaseDashboard({
           </span>
         </div>
         <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>
-          Optimistic concurrency: state transitions enforced via append-only event stream.
+          Optimistic concurrency: state transitions enforced via the append-oriented audit event stream.
         </p>
       </div>
     </section>

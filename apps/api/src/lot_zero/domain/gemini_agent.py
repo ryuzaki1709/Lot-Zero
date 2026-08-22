@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import logging
 import os
 import re
-import traceback
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
@@ -41,6 +39,8 @@ class ExtractedSignal:
     model_version: str
     doc_hash: str
     is_live_model: bool = False
+    is_grounded: bool = True
+    status: str = "grounded"
     discarded_claims: tuple[dict[str, Any], ...] = ()
     raw_text: str = ""
 
@@ -48,42 +48,54 @@ class ExtractedSignal:
 def _deterministic_extract(raw_notice_text: str) -> tuple[str, str, list[dict[str, str]]]:
     """Deterministic fallback extractor parsing raw document text directly."""
     # 1. Ingredient Lot extraction
-    lot_match = re.search(r"(?:Ingredient\s+Lot|Lot)\s+([A-Z0-9-]+)", raw_notice_text, re.IGNORECASE)
-    ingredient_lot = lot_match.group(1).strip() if lot_match else "UNKNOWN-LOT"
+    lot_match = re.search(
+        r"(?:Ingredient\s+Lot|Lot)\s+([A-Z0-9-]+)", raw_notice_text, re.IGNORECASE
+    )
+    ingredient_lot = lot_match.group(1).strip() if lot_match else ""
 
     # 2. Pathogen extraction
     pathogen_match = re.search(r"POSITIVE\s+for\s+([^\.\n\(\)]+)", raw_notice_text, re.IGNORECASE)
-    pathogen = pathogen_match.group(1).strip() if pathogen_match else "Pathogen Detected"
+    pathogen = pathogen_match.group(1).strip() if pathogen_match else ""
 
     # 3. Citation phrases derived from document content
     candidate_claims = []
-    
+
     # Check lot sentence
-    lot_quote_match = re.search(r"(?:Raw\s+Ingredient\s+Lot\s+[A-Z0-9-]+\s*\([^\)]+\)|Lot\s+[A-Z0-9-]+)", raw_notice_text)
+    lot_quote_match = re.search(
+        r"(?:Raw\s+Ingredient\s+Lot\s+[A-Z0-9-]+\s*\([^\)]+\)|Lot\s+[A-Z0-9-]+)", raw_notice_text
+    )
     if lot_quote_match:
-        candidate_claims.append({
-            "claim_type": "Contaminated Lot",
-            "verbatim_quote": lot_quote_match.group(0),
-        })
+        candidate_claims.append(
+            {
+                "claim_type": "Contaminated Lot",
+                "verbatim_quote": lot_quote_match.group(0),
+            }
+        )
 
     # Check pathogen sentence
     pathogen_quote_match = re.search(r"POSITIVE\s+for\s+[^\.\n]+", raw_notice_text)
     if pathogen_quote_match:
-        candidate_claims.append({
-            "claim_type": "Biohazard Finding",
-            "verbatim_quote": pathogen_quote_match.group(0),
-        })
+        candidate_claims.append(
+            {
+                "claim_type": "Biohazard Finding",
+                "verbatim_quote": pathogen_quote_match.group(0),
+            }
+        )
 
     # Check scope / recommendation sentence
-    scope_quote_match = re.search(r"(?:Immediate\s+scope\s+isolation[^\.\n]+|RECOMMENDATION:[^\.\n]+)", raw_notice_text)
+    scope_quote_match = re.search(
+        r"(?:Immediate\s+scope\s+isolation[^\.\n]+|RECOMMENDATION:[^\.\n]+)", raw_notice_text
+    )
     if scope_quote_match:
         val = scope_quote_match.group(0)
         if val.startswith("RECOMMENDATION:"):
             val = val.replace("RECOMMENDATION:", "").strip()
-        candidate_claims.append({
-            "claim_type": "Containment Scope",
-            "verbatim_quote": val,
-        })
+        candidate_claims.append(
+            {
+                "claim_type": "Containment Scope",
+                "verbatim_quote": val,
+            }
+        )
 
     return ingredient_lot, pathogen, candidate_claims
 
@@ -97,7 +109,7 @@ def analyze_safety_signal(
     doc_version: str = "v1.0 (Signed Apex Labs Report)",
 ) -> ExtractedSignal:
     """Analyze raw laboratory notice text, extract contaminated lot and bounding evidence spans.
-    
+
     Derives SHA-256 digest dynamically from the provided raw_notice_text, queries Gemini
     with structured schema if configured, derives character offsets mechanically via string indexing,
     and rejects ungrounded non-verbatim quotes.
@@ -129,7 +141,7 @@ def analyze_safety_signal(
             project = os.getenv("GOOGLE_CLOUD_PROJECT", "project-b2c3348e-d718-4255-be2")
             location = os.getenv("GOOGLE_CLOUD_LOCATION", "global")
             client = genai.Client(vertexai=True, project=project, location=location)
-            
+
             response = client.models.generate_content(
                 model="gemini-3.5-flash",
                 contents=prompt,
@@ -138,13 +150,16 @@ def analyze_safety_signal(
                     response_schema=SignalAnalysisSchema,
                 ),
             )
+            if response.text is None:
+                raise ValueError("Received empty response from Vertex AI Gemini model")
             parsed_result = SignalAnalysisSchema.model_validate_json(response.text)
             model_tag = "gemini-3.5-flash (Vertex AI Live)"
             is_live_model = True
             logger.info("Gemini live extraction on Vertex AI succeeded.")
         except Exception as e:
-            logger.exception("Vertex AI Exception during safety signal extraction: %s", e)
-            traceback.print_exc()
+            logger.warning(
+                "Vertex AI extraction failed, falling back to deterministic: %s", type(e).__name__
+            )
             model_tag = f"gemini-3.5-flash (Vertex AI Fallback: {type(e).__name__})"
     elif gemini_key:
         try:
@@ -160,13 +175,18 @@ def analyze_safety_signal(
                     response_schema=SignalAnalysisSchema,
                 ),
             )
+            if response.text is None:
+                raise ValueError("Received empty response from Google GenAI model")
             parsed_result = SignalAnalysisSchema.model_validate_json(response.text)
             model_tag = "gemini-3.5-flash (Google GenAI Live)"
+
             is_live_model = True
             logger.info("Gemini live extraction on Google GenAI API succeeded.")
         except Exception as e:
-            logger.exception("Google GenAI Exception during safety signal extraction: %s", e)
-            traceback.print_exc()
+            logger.warning(
+                "Google GenAI extraction failed, falling back to deterministic: %s",
+                type(e).__name__,
+            )
             model_tag = f"gemini-3.5-flash (Google GenAI Fallback: {type(e).__name__})"
 
     # Fallback to deterministic parser if live model didn't run or failed
@@ -175,7 +195,10 @@ def analyze_safety_signal(
         parsed_result = SignalAnalysisSchema(
             ingredient_lot=det_lot,
             pathogen=det_pathogen,
-            claims=[ClaimExtraction(claim_type=c["claim_type"], verbatim_quote=c["verbatim_quote"]) for c in det_claims],
+            claims=[
+                ClaimExtraction(claim_type=c["claim_type"], verbatim_quote=c["verbatim_quote"])
+                for c in det_claims
+            ],
         )
 
     # Mechanical grounding verification and offset calculation
@@ -186,7 +209,7 @@ def analyze_safety_signal(
         quote = claim.verbatim_quote.strip()
         if not quote:
             continue
-        
+
         # Grounding check: must exist verbatim in raw_notice_text
         if quote in raw_notice_text:
             start_offset = raw_notice_text.index(quote)
@@ -207,23 +230,38 @@ def analyze_safety_signal(
             )
         else:
             # Ungrounded claim rejected
-            logger.warning("Rejected ungrounded citation quote: %r (claim=%s)", quote, claim.claim_type)
-            discarded_claims.append({
-                "claim_type": claim.claim_type,
-                "quote": quote,
-                "reason": "Quote not found verbatim in source document",
-            })
+            logger.warning(
+                "Rejected ungrounded citation quote for claim type: %s", claim.claim_type
+            )
+            discarded_claims.append(
+                {
+                    "claim_type": claim.claim_type,
+                    "reason": "Quote not found verbatim in source document",
+                }
+            )
+
+    lot = parsed_result.ingredient_lot.strip()
+    pathogen = parsed_result.pathogen.strip()
+    is_grounded = bool(
+        lot
+        and pathogen
+        and valid_spans
+        and (lot in raw_notice_text or any(lot in s.claim_type for s in valid_spans))
+    )
+    status = "grounded" if is_grounded else "needs_review"
 
     return ExtractedSignal(
         source_id=source_id,
-        ingredient_lot=parsed_result.ingredient_lot.strip(),
-        pathogen=parsed_result.pathogen.strip(),
+        ingredient_lot=lot,
+        pathogen=pathogen,
         spans=tuple(valid_spans),
         recommended_scope_records=(),
         extracted_at=now,
         model_version=model_tag,
         doc_hash=doc_hash,
         is_live_model=is_live_model,
+        is_grounded=is_grounded,
+        status=status,
         discarded_claims=tuple(discarded_claims),
         raw_text=raw_notice_text,
     )

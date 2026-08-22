@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from decimal import Decimal
 from typing import Annotated, Literal
 
 from pydantic import Field, TypeAdapter
@@ -76,9 +75,15 @@ class AcknowledgementRecordedEvent(EventRecord):
 
 class ClosureRequestedEvent(EventRecord):
     kind: Literal["closure_requested"] = "closure_requested"
+    request_id: Identifier
+    requester_principal_id: Identifier
+    requested_scope_version: NonNegativeVersion = 0
+    requested_policy_version: Identifier = "EVAL-CLOSE-01"
     closure_id: Identifier
     policy_version: Identifier
     outstanding_acknowledgement_ids: tuple[Identifier, ...] = ()
+    evidence_record_ids: tuple[Identifier, ...] = ()
+    request_stream_version: NonNegativeVersion
 
 
 class ContainmentAttemptedEvent(EventRecord):
@@ -110,4 +115,4 @@ type EventValue = Annotated[
     | ApprovalDecision,
     Field(discriminator="kind"),
 ]
-Event = TypeAdapter(EventValue)
+Event: TypeAdapter[EventValue] = TypeAdapter(EventValue)

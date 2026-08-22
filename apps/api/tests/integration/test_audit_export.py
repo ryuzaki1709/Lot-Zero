@@ -14,10 +14,8 @@ from lot_zero.domain.audit_export import (
     verify_audit_bundle,
 )
 from lot_zero.domain.events import (
-    AcknowledgementRecordedEvent,
     ContainmentRequestedEvent,
     ScopeProposedEvent,
-    TransitionEvent,
 )
 from lot_zero.domain.models import ApprovalDecision, IncidentState, RecallCase
 
@@ -205,7 +203,9 @@ def test_audit_export_endpoint_auth_and_tenant_scoping():
         client.post("/api/evaluation/simulate-signal", headers={"X-API-Key": KEY_COORD})
 
         # 3. Successful audit export
-        res_export = client.get("/api/cases/EVAL-CASE-01/audit-export", headers={"X-API-Key": KEY_COORD})
+        res_export = client.get(
+            "/api/cases/EVAL-CASE-01/audit-export", headers={"X-API-Key": KEY_COORD}
+        )
         assert res_export.status_code == 200
         bundle = res_export.json()
 
@@ -220,5 +220,7 @@ def test_audit_export_endpoint_auth_and_tenant_scoping():
         assert error is None
 
         # 4. Query non-existent case returns 404
-        res_404 = client.get("/api/cases/NON-EXISTENT-CASE/audit-export", headers={"X-API-Key": KEY_COORD})
+        res_404 = client.get(
+            "/api/cases/NON-EXISTENT-CASE/audit-export", headers={"X-API-Key": KEY_COORD}
+        )
         assert res_404.status_code == 404

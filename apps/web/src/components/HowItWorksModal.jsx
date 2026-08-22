@@ -82,8 +82,9 @@ export function HowItWorksModal({ isOpen, onClose }) {
               3. Deterministic Python Domain Kernel (118 Passed Tests)
             </div>
             <p style={{ color: 'var(--text-secondary)', fontSize: '12px', lineHeight: '1.4' }}>
-              Graph traversal, quantity summation, policy limits (<code className="mono-val">EVAL-HOLD-01</code>), and immutable SHA-256 event-sourced ledgers are executed by pure deterministic Python code with optimistic concurrency control.
+              Graph traversal, quantity summation, policy limits (<code className="mono-val">EVAL-HOLD-01</code>), and tamper-evident SHA-256 event-sourced audit ledgers are executed by pure deterministic Python code with optimistic concurrency control.
             </p>
+
           </div>
 
           {/* Pillar 4 */}

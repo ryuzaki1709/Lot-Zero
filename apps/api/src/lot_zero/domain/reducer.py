@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from datetime import datetime
-from decimal import Decimal
 
 from .errors import InvariantViolation
 from .events import (
@@ -23,17 +22,17 @@ from .events import (
 )
 from .identifiers import canonical_sha256
 from .ledger import append_ledger_entry, verify_ledger
-from .transitions import transition
 from .models import (
     Acknowledgement,
     AffectedScope,
     ApprovalDecision,
+    ClosureRequest,
     ContainmentAction,
     IncidentState,
     LedgerEntry,
     NotificationPacket,
 )
-from .transitions import TransitionEvent, transition
+from .transitions import transition
 
 
 def _committed(
@@ -82,9 +81,13 @@ def apply_event(state: IncidentState, event: object) -> IncidentState:
 
     # Universal tenant & case boundary invariant check
     if hasattr(event, "tenant_id") and getattr(event, "tenant_id") != state.case.tenant_id:
-        raise InvariantViolation(f"Event tenant ({getattr(event, 'tenant_id')}) does not match case ({state.case.tenant_id})")
+        raise InvariantViolation(
+            f"Event tenant ({getattr(event, 'tenant_id')}) does not match case ({state.case.tenant_id})"
+        )
     if hasattr(event, "case_id") and getattr(event, "case_id") != state.case.case_id:
-        raise InvariantViolation(f"Event case ({getattr(event, 'case_id')}) does not match case ({state.case.case_id})")
+        raise InvariantViolation(
+            f"Event case ({getattr(event, 'case_id')}) does not match case ({state.case.case_id})"
+        )
 
     if isinstance(event, ContainmentAttemptedEvent):
         action: ContainmentAction = event.action
@@ -114,13 +117,17 @@ def apply_event(state: IncidentState, event: object) -> IncidentState:
             None,
         )
         if target_action is None:
-            raise InvariantViolation(f"Cannot release unmaterialized containment action '{event.action_id}'")
+            raise InvariantViolation(
+                f"Cannot release unmaterialized containment action '{event.action_id}'"
+            )
         new_release_action = ContainmentAction(
             action_id=f"REL-{event.action_id}",
             tenant_id=event.tenant_id,
             case_id=event.case_id,
             scope_id=event.scope_id,
-            scope_version=state.scopes[0].scope_version if state.scopes else target_action.scope_version,
+            scope_version=state.scopes[0].scope_version
+            if state.scopes
+            else target_action.scope_version,
             action_type="release_hold",
             status="succeeded",
             target_record_ids=target_action.target_record_ids,
@@ -141,7 +148,11 @@ def apply_event(state: IncidentState, event: object) -> IncidentState:
         )
 
     if isinstance(event, AcknowledgementRecordedEvent):
-        ack_time = event.call_timestamp or event.occurred_at if event.acknowledgement_status == "verified" else None
+        ack_time = (
+            event.call_timestamp or event.occurred_at
+            if event.acknowledgement_status == "verified"
+            else None
+        )
         acknowledgement = Acknowledgement(
             acknowledgement_id=event.acknowledgement_id,
             tenant_id=event.tenant_id,
@@ -157,7 +168,7 @@ def apply_event(state: IncidentState, event: object) -> IncidentState:
             acknowledged_at=ack_time,
         )
 
-        retained = tuple(
+        retained_acks: tuple[Acknowledgement, ...] = tuple(
             existing
             for existing in state.acknowledgements
             if existing.acknowledgement_id != event.acknowledgement_id
@@ -171,10 +182,46 @@ def apply_event(state: IncidentState, event: object) -> IncidentState:
             entry_type="ACKNOWLEDGEMENT_RECORDED",
             record_ids=(event.acknowledgement_id, event.recipient_id),
             payload_hash=canonical_sha256(event),
-            updates={"acknowledgements": (*retained, acknowledgement)},
+            updates={"acknowledgements": (*retained_acks, acknowledgement)},
         )
 
     if isinstance(event, ApprovalDecision):
+        updates: dict[str, object] = {"approvals": (*state.approvals, event)}
+        if event.approval_type == "closure":
+            updated_requests = tuple(
+                r.model_copy(update={"is_consumed": True}) if not r.is_consumed else r
+                for r in state.closure_requests
+            )
+            updates["closure_requests"] = updated_requests
+        elif event.approval_type == "notification":
+            packet = NotificationPacket(
+                packet_id=event.packet_id or getattr(event, "packet_id", None) or "PKT-001",
+                tenant_id=event.tenant_id,
+                case_id=event.case_id,
+                scope_id=event.scope_id or "SCOPE-01",
+                scope_version=event.scope_version if event.scope_version is not None else 1,
+                payload_version=event.payload_version or "PL-01",
+                payload_hash=event.payload_hash
+                or event.boundary_version
+                or "payload-sha256-verified-digest",
+                status="planned",
+                recipient_ids=getattr(event, "recipient_ids", None)
+                or (
+                    "RECIPIENT-001",
+                    "RECIPIENT-002",
+                    "RECIPIENT-003",
+                    "RECIPIENT-004",
+                    "RECIPIENT-005",
+                    "RECIPIENT-006",
+                ),
+                created_at=event.decided_at,
+                requester_id=event.requester_id,
+            )
+            retained_packets = tuple(
+                p for p in state.notification_packets if p.packet_id != packet.packet_id
+            )
+            updates["notification_packets"] = (*retained_packets, packet)
+
         return _with_ledger_entry(
             state,
             now=event.decided_at,
@@ -184,7 +231,7 @@ def apply_event(state: IncidentState, event: object) -> IncidentState:
             entry_type=f"APPROVAL_{event.approval_type.upper()}",
             record_ids=(event.approval_id, event.approver_id),
             payload_hash=canonical_sha256(event),
-            updates={"approvals": (*state.approvals, event)},
+            updates=updates,
         )
 
     if isinstance(event, ScopeProposedEvent):
@@ -199,6 +246,7 @@ def apply_event(state: IncidentState, event: object) -> IncidentState:
             evidence_record_ids=event.evidence_record_ids,
             affected_quantity=event.affected_quantity,
             created_at=event.occurred_at,
+            requester_id=event.actor_id,
             ingredient_lot=getattr(event, "ingredient_lot", None),
             pathogen=getattr(event, "pathogen", None),
         )
@@ -230,8 +278,11 @@ def apply_event(state: IncidentState, event: object) -> IncidentState:
             quantity=event.quantity,
             policy_version=event.policy_version,
             requested_at=event.occurred_at,
+            requester_id=event.actor_id,
         )
-        retained_actions = tuple(a for a in state.containment_actions if a.action_id != event.action_id)
+        retained_actions = tuple(
+            a for a in state.containment_actions if a.action_id != event.action_id
+        )
         return _with_ledger_entry(
             state,
             now=event.occurred_at,
@@ -253,11 +304,16 @@ def apply_event(state: IncidentState, event: object) -> IncidentState:
             scope_version=event.scope_version,
             payload_version=event.payload_version,
             payload_hash=event.payload_hash,
+            policy_version=event.policy_version,
             status="planned",
             recipient_ids=event.recipient_ids,
             created_at=event.occurred_at,
+            requester_id=event.actor_id,
         )
-        retained_packets = tuple(p for p in state.notification_packets if p.packet_id != event.packet_id)
+
+        retained_packets = tuple(
+            p for p in state.notification_packets if p.packet_id != event.packet_id
+        )
         return _with_ledger_entry(
             state,
             now=event.occurred_at,
@@ -271,6 +327,22 @@ def apply_event(state: IncidentState, event: object) -> IncidentState:
         )
 
     if isinstance(event, ClosureRequestedEvent):
+        closure_req = ClosureRequest(
+            request_id=event.request_id,
+            tenant_id=event.tenant_id,
+            case_id=event.case_id,
+            requester_principal_id=event.requester_principal_id,
+            case_version=event.case_version,
+            requested_scope_version=event.requested_scope_version,
+            requested_policy_version=event.requested_policy_version,
+            closure_id=event.closure_id,
+            outstanding_acknowledgement_ids=event.outstanding_acknowledgement_ids,
+            evidence_record_ids=event.evidence_record_ids,
+            request_stream_version=event.request_stream_version,
+            is_consumed=False,
+            requested_at=event.occurred_at,
+        )
+        retained_reqs = tuple(r for r in state.closure_requests if r.request_id != event.request_id)
         return _with_ledger_entry(
             state,
             now=event.occurred_at,
@@ -278,8 +350,9 @@ def apply_event(state: IncidentState, event: object) -> IncidentState:
             tenant_id=event.tenant_id,
             case_id=event.case_id,
             entry_type="CLOSURE_REQUESTED",
-            record_ids=(event.closure_id, event.policy_version),
+            record_ids=(event.request_id, event.requester_principal_id, event.closure_id),
             payload_hash=canonical_sha256(event),
+            updates={"closure_requests": (*retained_reqs, closure_req)},
         )
 
     if isinstance(event, TransitionEvent):

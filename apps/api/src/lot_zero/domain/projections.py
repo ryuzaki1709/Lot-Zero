@@ -1,4 +1,4 @@
-"""Fast read-model projections querying the append-only event store directly."""
+"""Fast read-model projections querying the application event store directly."""
 
 from __future__ import annotations
 
@@ -35,9 +35,9 @@ def query_case_summaries(
     filter_type: FilterType = "all",
 ) -> list[CaseSummaryProjection]:
     """Project case summaries directly from incident_events table without full aggregate rehydration.
-    
-    NOTE ON SCALE: For high-event-volume enterprise deployments, maintaining an incrementally 
-    updated materialized projection table (via asynchronous subscriber or database triggers) 
+
+    NOTE ON SCALE: For high-event-volume enterprise deployments, maintaining an incrementally
+    updated materialized projection table (via asynchronous subscriber or database triggers)
     is the recommended upgrade path over querying the append-only events log per request.
     """
     # 1. Fetch all distinct cases for the tenant
@@ -106,7 +106,10 @@ def query_case_summaries(
                     phase = target_phase
 
             # Scope proposals
-            if event_type in ("scope_proposed", "SCOPE_PROPOSED") or data.get("kind") == "scope_proposed":
+            if (
+                event_type in ("scope_proposed", "SCOPE_PROPOSED")
+                or data.get("kind") == "scope_proposed"
+            ):
                 scope_id = data.get("scope_id", "SCOPE-001")
                 qty = float(data.get("affected_quantity", 0.0))
                 holds[scope_id] = qty
@@ -114,13 +117,19 @@ def query_case_summaries(
                     pending_qa_types.add("scope")
 
             # Containment requests
-            if event_type in ("containment_requested", "CONTAINMENT_REQUESTED") or data.get("kind") == "containment_requested":
+            if (
+                event_type in ("containment_requested", "CONTAINMENT_REQUESTED")
+                or data.get("kind") == "containment_requested"
+            ):
                 scope_id = data.get("scope_id", "SCOPE-001")
                 if not qa_containment_approved:
                     pending_qa_types.add("containment")
 
             # Containment attempts
-            if event_type in ("containment_attempted", "CONTAINMENT_ATTEMPTED") or data.get("kind") == "containment_attempted":
+            if (
+                event_type in ("containment_attempted", "CONTAINMENT_ATTEMPTED")
+                or data.get("kind") == "containment_attempted"
+            ):
                 action = data.get("action", {})
                 scope_id = action.get("scope_id", "SCOPE-001")
                 qty = float(action.get("quantity", 0.0))
@@ -129,7 +138,10 @@ def query_case_summaries(
                     pending_qa_types.add("containment")
 
             # Approvals
-            if event_type in ("approval_decision", "APPROVAL_DECISION") or data.get("kind") == "approval_decision":
+            if (
+                event_type in ("approval_decision", "APPROVAL_DECISION")
+                or data.get("kind") == "approval_decision"
+            ):
                 app_type = data.get("approval_type")
                 decision = data.get("decision")
                 role = data.get("approver_role")
@@ -143,19 +155,27 @@ def query_case_summaries(
                         qa_release_approved_scopes.add(data.get("scope_id", "SCOPE-001"))
 
             # Releases
-            if event_type in ("containment_released", "CONTAINMENT_RELEASED") or data.get("kind") == "containment_released":
+            if (
+                event_type in ("containment_released", "CONTAINMENT_RELEASED")
+                or data.get("kind") == "containment_released"
+            ):
                 scope_id = data.get("scope_id", "SCOPE-001")
                 released_scopes.add(scope_id)
 
             # Acknowledgements
-            if event_type in ("acknowledgement_recorded", "ACKNOWLEDGEMENT_RECORDED") or data.get("kind") == "acknowledgement_recorded":
+            if (
+                event_type in ("acknowledgement_recorded", "ACKNOWLEDGEMENT_RECORDED")
+                or data.get("kind") == "acknowledgement_recorded"
+            ):
                 ack_id = data.get("acknowledgement_id")
                 status = data.get("acknowledgement_status")
                 if ack_id and status:
                     acks[ack_id] = status
 
         # Compute projected indicators
-        active_hold_scopes = {s: q for s, q in holds.items() if s not in released_scopes and phase != "closed"}
+        active_hold_scopes = {
+            s: q for s, q in holds.items() if s not in released_scopes and phase != "closed"
+        }
         has_open_holds = len(active_hold_scopes) > 0
         open_hold_quantity = sum(active_hold_scopes.values())
 

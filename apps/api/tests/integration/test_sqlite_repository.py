@@ -57,7 +57,9 @@ async def test_sqlite_append_and_load_rehydration():
             occurred_at=NOW,
         )
 
-        new_state = await repo.append(CASE, expected_version=0, events=[scope_event], tenant_id=TENANT)
+        new_state = await repo.append(
+            CASE, expected_version=0, events=[scope_event], tenant_id=TENANT
+        )
         assert new_state.case.case_version == 1
         assert len(new_state.scopes) == 1
         assert new_state.scopes[0].scope_id == "SCOPE-001"
@@ -170,8 +172,8 @@ async def test_sqlite_restart_replay_equivalence():
             occurred_at=NOW,
         )
 
-        state_1 = await repo_1.append(CASE, expected_version=0, events=[ev1], tenant_id=TENANT)
-        state_2 = await repo_1.append(CASE, expected_version=1, events=[ev2], tenant_id=TENANT)
+        await repo_1.append(CASE, expected_version=0, events=[ev1], tenant_id=TENANT)
+        await repo_1.append(CASE, expected_version=1, events=[ev2], tenant_id=TENANT)
         state_3 = await repo_1.append(CASE, expected_version=2, events=[ev3], tenant_id=TENANT)
         repo_1.close()
 
@@ -207,15 +209,22 @@ async def test_sqlite_full_api_driven_lifecycle_restart_replay_equivalence():
     endpoint state and the rehydrated state.
     """
     import httpx
-    from lot_zero.app import app, repository, DEFAULT_CASE_ID
 
-    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+    from lot_zero.app import DEFAULT_CASE_ID, app, repository
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
         # Reset
-        res_reset = await client.post("/api/evaluation/reset", headers={"X-API-Key": "key-recall-coord-01"})
+        res_reset = await client.post(
+            "/api/evaluation/reset", headers={"X-API-Key": "key-eval-admin-01"}
+        )
         assert res_reset.status_code == 200
 
         # 1. Simulate signal
-        res_sig = await client.post("/api/evaluation/simulate-signal", headers={"X-API-Key": "key-recall-coord-01"})
+        res_sig = await client.post(
+            "/api/evaluation/simulate-signal", headers={"X-API-Key": "key-recall-coord-01"}
+        )
         assert res_sig.status_code == 200
 
         # 2. QA Lead approves containment
@@ -226,8 +235,26 @@ async def test_sqlite_full_api_driven_lifecycle_restart_replay_equivalence():
         )
         assert res_app.status_code == 200
 
+        # 2b. Customer Operations approves notification
+        res_notif = await client.post(
+            "/api/evaluation/approve-notification",
+            headers={"X-API-Key": "key-ops-01"},
+            json={
+                "packet_id": "PKT-001",
+                "payload_version": "PAYLOAD-001",
+                "payload_hash": "payload-sha256-verified-digest",
+                "scope_id": "SCOPE-EVAL-01",
+                "scope_version": 1,
+                "policy_version": "EVAL-HOLD-01",
+                "rationale": "Customer Operations approves notification packet.",
+            },
+        )
+        assert res_notif.status_code == 200
+
         # 3. Customer Operations dispatches outbox
-        res_out = await client.post("/api/evaluation/dispatch-outbox", headers={"X-API-Key": "key-ops-01"})
+        res_out = await client.post(
+            "/api/evaluation/dispatch-outbox", headers={"X-API-Key": "key-ops-01"}
+        )
         assert res_out.status_code == 200
 
         # 4. Resolve ACK-006 via phone attestation
@@ -268,9 +295,24 @@ async def test_sqlite_full_api_driven_lifecycle_restart_replay_equivalence():
         )
         assert res_rel2.status_code == 200
 
-        # 7. Request closure -> closed
-        res_close = await client.post("/api/evaluation/request-closure", headers={"X-API-Key": "key-recall-coord-01"})
+        # 7. Request closure as Recall Coordinator & Authorize closure as Closure Authority
+        res_req = await client.post(
+            "/api/evaluation/request-closure", headers={"X-API-Key": "key-recall-coord-01"}
+        )
+        assert res_req.status_code == 200
+        req_id = res_req.json()["request_id"]
+
+        res_close = await client.post(
+            "/api/evaluation/authorize-closure",
+            headers={"X-API-Key": "key-closure-auth-01"},
+            json={
+                "request_id": req_id,
+                "rationale": "All criteria met for closure",
+                "effectiveness_evidence_ids": ["EVID-01"],
+            },
+        )
         assert res_close.status_code == 200
+        assert res_close.json()["status"] == "closed"
 
         from lot_zero.app import current_state as live_state
 
@@ -317,8 +359,12 @@ async def test_tenant_scoping_isolation():
         )
 
         # Both append at stream_version=1 under their own tenant_id
-        state_a = await repo.append(CASE, expected_version=0, events=[ev_tenant_a], tenant_id="TENANT-ALPHA")
-        state_b = await repo.append(CASE, expected_version=0, events=[ev_tenant_b], tenant_id="TENANT-BETA")
+        state_a = await repo.append(
+            CASE, expected_version=0, events=[ev_tenant_a], tenant_id="TENANT-ALPHA"
+        )
+        state_b = await repo.append(
+            CASE, expected_version=0, events=[ev_tenant_b], tenant_id="TENANT-BETA"
+        )
 
         assert state_a.scopes[0].scope_id == "SCOPE-A"
         assert state_b.scopes[0].scope_id == "SCOPE-B"

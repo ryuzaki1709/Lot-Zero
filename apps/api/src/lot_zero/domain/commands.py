@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from datetime import datetime
-from decimal import Decimal
 from typing import Annotated, Literal
 
 from pydantic import Field, TypeAdapter
 
 from .identifiers import ActionIntent
 from .models import DomainRecord, Identifier, NonNegativeQuantity, NonNegativeVersion
+from .transitions import PrimaryPhase
 
 
 class CommandRecord(DomainRecord):
@@ -42,6 +42,17 @@ class RequestContainmentCommand(CommandRecord):
     quantity: NonNegativeQuantity
 
 
+class RequestNotificationCommand(CommandRecord):
+    kind: Literal["request_notification"] = "request_notification"
+    scope_id: Identifier
+    scope_version: NonNegativeVersion
+    packet_id: Identifier
+    payload_version: Identifier
+    payload_hash: Identifier
+    policy_version: Identifier
+    recipient_ids: Annotated[tuple[Identifier, ...], Field(min_length=1)]
+
+
 class SendNotificationCommand(CommandRecord):
     kind: Literal["send_notification"]
     scope_id: Identifier
@@ -68,10 +79,14 @@ class RecordAcknowledgementCommand(CommandRecord):
 
 
 class RequestClosureCommand(CommandRecord):
-    kind: Literal["request_closure"]
+    kind: Literal["request_closure"] = "request_closure"
+    request_id: Identifier
     closure_id: Identifier
     policy_version: Identifier
+    scope_id: Identifier | None = None
+    scope_version: NonNegativeVersion = 0
     outstanding_acknowledgement_ids: tuple[Identifier, ...] = ()
+    evidence_record_ids: tuple[Identifier, ...] = ()
 
 
 class ApprovalCommand(CommandRecord):
@@ -101,11 +116,16 @@ class ApproveNotificationCommand(ApprovalCommand):
     scope_version: NonNegativeVersion
     packet_id: Identifier
     payload_version: Identifier
+    payload_hash: Identifier
     policy_version: Identifier
 
 
 class ApproveClosureCommand(ApprovalCommand):
     kind: Literal["approve_closure"]
+    request_id: Identifier
+    expected_request_stream_version: NonNegativeVersion
+    expected_scope_version: NonNegativeVersion = 0
+    expected_policy_version: Identifier = "EVAL-CLOSE-01"
     closure_id: Identifier
     policy_version: Identifier
     effectiveness_evidence_ids: Annotated[tuple[Identifier, ...], Field(min_length=1)]
@@ -125,9 +145,6 @@ class ApproveReleaseCommand(ApprovalCommand):
 class ExecuteStandingPolicyCommand(CommandRecord):
     kind: Literal["execute_standing_policy"]
     intent: ActionIntent
-
-
-from .transitions import PrimaryPhase
 
 
 class AdvancePhaseCommand(CommandRecord):
@@ -151,5 +168,4 @@ type CommandValue = Annotated[
     | AdvancePhaseCommand,
     Field(discriminator="kind"),
 ]
-Command = TypeAdapter(CommandValue)
-
+Command: TypeAdapter[CommandValue] = TypeAdapter(CommandValue)

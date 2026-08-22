@@ -1,6 +1,7 @@
 """Tests for Gemini signal grounding, schema extraction, and mechanical citation offset verification."""
 
 import hashlib
+
 from lot_zero.domain.gemini_agent import (
     ClaimExtraction,
     SignalAnalysisSchema,
@@ -37,7 +38,7 @@ def test_gemini_grounding_follows_document():
     for span in extracted.spans:
         assert span.source_doc_hash == expected_hash
         assert span.start_offset < span.end_offset
-        sliced = custom_doc[span.start_offset:span.end_offset]
+        sliced = custom_doc[span.start_offset : span.end_offset]
         assert len(sliced) > 0
         if span.claim_type == "Contaminated Lot":
             assert "ING-9999" in sliced
@@ -93,7 +94,10 @@ def test_hallucinated_claims_rejected():
     # Valid claim accepted
     assert len(extracted.spans) == 1
     assert extracted.spans[0].claim_type == "Biohazard Finding"
-    assert custom_doc[extracted.spans[0].start_offset:extracted.spans[0].end_offset] == "POSITIVE for E. coli O157:H7"
+    assert (
+        custom_doc[extracted.spans[0].start_offset : extracted.spans[0].end_offset]
+        == "POSITIVE for E. coli O157:H7"
+    )
 
     # Hallucinated claim rejected & discarded
     assert len(extracted.discarded_claims) == 1
@@ -120,4 +124,7 @@ def test_changing_document_changes_doc_hash_and_offsets():
     for orig_span, shifted_span in zip(extracted_original.spans, extracted_shifted.spans):
         assert shifted_span.start_offset == orig_span.start_offset + prefix_len
         assert shifted_span.end_offset == orig_span.end_offset + prefix_len
-        assert RAW_TEXT[orig_span.start_offset:orig_span.end_offset] == shifted_doc[shifted_span.start_offset:shifted_span.end_offset]
+        assert (
+            RAW_TEXT[orig_span.start_offset : orig_span.end_offset]
+            == shifted_doc[shifted_span.start_offset : shifted_span.end_offset]
+        )

@@ -4,7 +4,6 @@ from pathlib import Path
 import jsonschema
 import pytest
 
-
 SCHEMA_PATH = Path(__file__).resolve().parents[4] / "contracts" / "incident-api.schema.json"
 
 

@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from lot_zero.adapters.sqlite_repository import SqliteIncidentRepository
-from lot_zero.app import app, repository
+from lot_zero.app import app
 from lot_zero.domain.events import (
     AcknowledgementRecordedEvent,
     ContainmentReleasedEvent,
@@ -15,7 +15,7 @@ from lot_zero.domain.events import (
     ScopeProposedEvent,
     TransitionEvent,
 )
-from lot_zero.domain.models import ApprovalDecision, IncidentState, RecallCase
+from lot_zero.domain.models import IncidentState, RecallCase
 from lot_zero.domain.projections import query_case_summaries
 
 NOW = datetime(2026, 8, 14, 12, 0, 0, tzinfo=UTC)
@@ -23,6 +23,7 @@ KEY_QA = "key-qa-lead-01"
 KEY_COORD = "key-recall-coord-01"
 KEY_OPS = "key-ops-01"
 KEY_CLOSURE = "key-closure-auth-01"
+KEY_ADMIN = "key-eval-admin-01"
 
 
 def make_initial_state(tenant_id: str, case_id: str) -> IncidentState:
@@ -74,7 +75,9 @@ async def test_case_summary_projections_and_filters():
             quantity=Decimal("150"),
             occurred_at=NOW,
         )
-        await repo.append("CASE-OPEN-HOLD", expected_version=0, events=[ev_c1, ev_c1_req], tenant_id=tenant)
+        await repo.append(
+            "CASE-OPEN-HOLD", expected_version=0, events=[ev_c1, ev_c1_req], tenant_id=tenant
+        )
 
         # Case 2: Pending QA Approval in scope review
         ev_c2_scope = ScopeProposedEvent(
@@ -99,7 +102,12 @@ async def test_case_summary_projections_and_filters():
             target_phase="scope_review",
             occurred_at=NOW,
         )
-        await repo.append("CASE-PENDING-QA", expected_version=0, events=[ev_c2_scope, ev_c2_trans], tenant_id=tenant)
+        await repo.append(
+            "CASE-PENDING-QA",
+            expected_version=0,
+            events=[ev_c2_scope, ev_c2_trans],
+            tenant_id=tenant,
+        )
 
         # Case 3: Blocked by Refusal / Rejected Ack
         ev_c3_scope = ScopeProposedEvent(
@@ -127,7 +135,12 @@ async def test_case_summary_projections_and_filters():
             acknowledgement_status="rejected",
             occurred_at=NOW,
         )
-        await repo.append("CASE-REJECTED-ACK", expected_version=0, events=[ev_c3_scope, ev_c3_ack], tenant_id=tenant)
+        await repo.append(
+            "CASE-REJECTED-ACK",
+            expected_version=0,
+            events=[ev_c3_scope, ev_c3_ack],
+            tenant_id=tenant,
+        )
 
         # Case 4: Closed Case
         ev_c4_scope = ScopeProposedEvent(
@@ -178,7 +191,12 @@ async def test_case_summary_projections_and_filters():
             target_phase="scope_review",
             occurred_at=NOW,
         )
-        await repo.append("CASE-CLOSED", expected_version=0, events=[ev_c4_scope, ev_c4_hold, ev_c4_rel, ev_c4_close], tenant_id=tenant)
+        await repo.append(
+            "CASE-CLOSED",
+            expected_version=0,
+            events=[ev_c4_scope, ev_c4_hold, ev_c4_rel, ev_c4_close],
+            tenant_id=tenant,
+        )
 
         # 1. Query all
         all_cases = query_case_summaries(repo._conn, tenant, filter_type="all")
@@ -198,7 +216,9 @@ async def test_case_summary_projections_and_filters():
         assert "CASE-PENDING-QA" in pending_ids
 
         # 4. Query blocked by rejections
-        rejection_cases = query_case_summaries(repo._conn, tenant, filter_type="blocked_by_rejections")
+        rejection_cases = query_case_summaries(
+            repo._conn, tenant, filter_type="blocked_by_rejections"
+        )
         rejection_ids = [c.case_id for c in rejection_cases]
         assert rejection_ids == ["CASE-REJECTED-ACK"]
         assert rejection_cases[0].rejected_ack_count == 1
@@ -224,7 +244,9 @@ async def test_projection_tenant_isolation():
             evidence_record_ids=("LAB-A",),
             occurred_at=NOW,
         )
-        await repo.append("CASE-COMMON-NAME", expected_version=0, events=[ev_alpha], tenant_id="TENANT-ALPHA")
+        await repo.append(
+            "CASE-COMMON-NAME", expected_version=0, events=[ev_alpha], tenant_id="TENANT-ALPHA"
+        )
 
         # Case under Tenant Beta
         ev_beta = ScopeProposedEvent(
@@ -240,7 +262,9 @@ async def test_projection_tenant_isolation():
             evidence_record_ids=("LAB-B",),
             occurred_at=NOW,
         )
-        await repo.append("CASE-COMMON-NAME", expected_version=0, events=[ev_beta], tenant_id="TENANT-BETA")
+        await repo.append(
+            "CASE-COMMON-NAME", expected_version=0, events=[ev_beta], tenant_id="TENANT-BETA"
+        )
 
         # Query Tenant Alpha
         alpha_cases = query_case_summaries(repo._conn, "TENANT-ALPHA", filter_type="all")
@@ -268,7 +292,7 @@ def test_projection_http_endpoints():
         assert res_no_auth.status_code == 401
 
         # 2. Reset and simulate signal
-        client.post("/api/evaluation/reset", headers={"X-API-Key": KEY_COORD})
+        client.post("/api/evaluation/reset", headers={"X-API-Key": KEY_ADMIN})
         client.post("/api/evaluation/simulate-signal", headers={"X-API-Key": KEY_COORD})
 
         # 3. Query open holds
@@ -284,6 +308,8 @@ def test_projection_http_endpoints():
         assert res_qa.status_code == 200
 
         # 5. Query blocked by rejections
-        res_blocked = client.get("/api/projections/cases/blocked-by-rejections", headers={"X-API-Key": KEY_OPS})
+        res_blocked = client.get(
+            "/api/projections/cases/blocked-by-rejections", headers={"X-API-Key": KEY_OPS}
+        )
         assert res_blocked.status_code == 200
         assert isinstance(res_blocked.json(), list)

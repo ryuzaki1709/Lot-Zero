@@ -21,6 +21,7 @@ from lot_zero.domain.models import (
     Acknowledgement,
     AffectedScope,
     ApprovalDecision,
+    ClosureRequest,
     ContainmentAction,
     IncidentState,
     NotificationPacket,
@@ -38,7 +39,24 @@ def principal(
     return Principal(tenant_id=tenant_id, principal_id=principal_id, roles=(role,))
 
 
-def state(*, approvals: tuple[ApprovalDecision, ...] = ()) -> IncidentState:
+def state(
+    *, approvals: tuple[ApprovalDecision, ...] = (), closure_requests: tuple = ()
+) -> IncidentState:
+    reqs = closure_requests or (
+        ClosureRequest(
+            request_id="REQ-CLOSE-001",
+            tenant_id=TENANT,
+            case_id=CASE,
+            requester_principal_id="REQUESTER-001",
+            case_version=7,
+            requested_scope_version=4,
+            requested_policy_version="EVAL-CLOSE-01",
+            closure_id="EVAL-CLOSE-01",
+            request_stream_version=8,
+            is_consumed=False,
+            requested_at=NOW,
+        ),
+    )
     return IncidentState(
         case=RecallCase(
             case_id=CASE,
@@ -71,7 +89,7 @@ def state(*, approvals: tuple[ApprovalDecision, ...] = ()) -> IncidentState:
                 scope_id="SCOPE-EVAL-01",
                 scope_version=4,
                 payload_version="PAYLOAD-002",
-                payload_hash="payload-sha256",
+                payload_hash="hash-notify-payload-01",
                 status="planned",
                 recipient_ids=("RECIPIENT-001",),
                 created_at=NOW,
@@ -88,6 +106,7 @@ def state(*, approvals: tuple[ApprovalDecision, ...] = ()) -> IncidentState:
             ),
         ),
         approvals=approvals,
+        closure_requests=reqs,
         updated_at=NOW,
     )
 
@@ -144,9 +163,12 @@ def notification_approval() -> ApprovalDecision:
         requester_id="REQUESTER-001",
         approver_id="APPROVER-002",
         case_version=7,
-        boundary_version="PAYLOAD-002",
+        boundary_version="hash-notify-payload-01",
+        packet_id="PACKET-001",
+        scope_id="SCOPE-EVAL-01",
         scope_version=4,
         payload_version="PAYLOAD-002",
+        payload_hash="hash-notify-payload-01",
         policy_version="NOTIFY-POLICY-01",
         decided_at=NOW,
     )
@@ -243,7 +265,7 @@ def test_notification_authorization_requires_matching_current_versions() -> None
         ({"case_version": 6}, "STALE_CASE_VERSION"),
         ({"scope_version": 3}, "STALE_SCOPE_VERSION"),
         ({"payload_version": "PAYLOAD-001"}, "STALE_PAYLOAD_VERSION"),
-        ({"policy_version": "NOTIFY-POLICY-OLD"}, "STALE_POLICY_VERSION"),
+        ({"policy_version": "NOTIFY-POLICY-OLD"}, "MISSING_NOTIFICATION_APPROVAL"),
     ),
 )
 def test_stale_or_cross_boundary_notification_is_inert(
@@ -308,6 +330,7 @@ def test_stale_or_cross_boundary_notification_is_inert(
                 scope_version=4,
                 packet_id="PACKET-001",
                 payload_version="PAYLOAD-002",
+                payload_hash="hash-notify-payload-01",
                 policy_version="NOTIFY-POLICY-01",
                 rationale="Payload reviewed",
             ),
@@ -329,8 +352,12 @@ def test_closure_is_blocked_by_the_authored_outstanding_acknowledgement() -> Non
         approval_id="APPROVAL-CLOSE-001",
         tenant_id=TENANT,
         case_id=CASE,
-        actor_id="REQUESTER-001",
+        actor_id="APPROVER-001",
         case_version=7,
+        request_id="REQ-CLOSE-001",
+        expected_request_stream_version=8,
+        expected_scope_version=4,
+        expected_policy_version="EVAL-CLOSE-01",
         closure_id="EVAL-CLOSE-01",
         policy_version="EVAL-CLOSE-01",
         rationale="Evidence reviewed",
@@ -404,7 +431,9 @@ def test_dual_signature_release_authority_and_separation_of_duties() -> None:
     )
 
     # 1. Dual role ambiguity rejection
-    dual_principal = Principal(tenant_id=TENANT, principal_id="DUAL-001", roles=("qa", "closure_authority"))
+    dual_principal = Principal(
+        tenant_id=TENANT, principal_id="DUAL-001", roles=("qa", "closure_authority")
+    )
     dual_decision = authorize(release_cmd, dual_principal, base_state)
     assert_inert_denial(dual_decision, "DUAL_ROLE_AMBIGUITY")
 
@@ -467,7 +496,9 @@ def test_dual_signature_release_authority_and_separation_of_duties() -> None:
         retest_doc_hash=valid_hash,
         decided_at=NOW,
     )
-    state_already_consumed = state_with_qa.model_copy(update={"approvals": (qa_approval_record, final_approval_record)})
+    state_already_consumed = state_with_qa.model_copy(
+        update={"approvals": (qa_approval_record, final_approval_record)}
+    )
     consumed_decision = authorize(release_cmd, closure_principal, state_already_consumed)
     assert_inert_denial(consumed_decision, "QA_APPROVAL_ALREADY_CONSUMED")
 
@@ -494,8 +525,12 @@ def test_consignee_rejection_blocks_closure_unconditionally() -> None:
         approval_id="APP-CLOSE-001",
         tenant_id=TENANT,
         case_id=CASE,
-        actor_id="REQUESTER-001",
+        actor_id="APPROVER-001",
         case_version=7,
+        request_id="REQ-CLOSE-001",
+        expected_request_stream_version=8,
+        expected_scope_version=4,
+        expected_policy_version="EVAL-CLOSE-01",
         closure_id="EVAL-CLOSE-01",
         policy_version="EVAL-CLOSE-01",
         rationale="Closure attempt with rejected ack",
@@ -541,5 +576,3 @@ def test_cannot_downgrade_verified_acknowledgement() -> None:
 
     decision = authorize(downgrade_cmd, principal("customer_operations"), verified_state)
     assert_inert_denial(decision, "CANNOT_DOWNGRADE_VERIFIED_ACKNOWLEDGEMENT")
-
-

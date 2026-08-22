@@ -1,0 +1,19 @@
+# Development and test verification constraints for Lot Zero (Python 3.12)
+-c constraints.txt
+iniconfig==2.3.0
+jsonschema==4.26.0
+jsonschema-specifications==2025.9.1
+librt==0.15.0
+mypy==1.20.2
+mypy_extensions==1.1.0
+packaging==26.3
+pathspec==1.1.1
+pluggy==1.6.0
+pyasn1==0.6.4
+pyasn1_modules==0.4.2
+pycparser==3.0
+Pygments==2.21.0
+pytest==8.4.2
+referencing==0.37.0
+rpds-py==2026.6.3
+ruff==0.16.4

@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { RefreshCw, BookOpen, Download, Sparkles } from 'lucide-react';
 import { ResetConfirmModal } from './ResetConfirmModal';
+import { hasEffectiveAuth } from '../utils/authConfig';
+
 
 /** Animates a number toward its target over ~600ms whenever it changes. */
 function useCountUp(target) {
@@ -38,6 +40,8 @@ export function Header({
   activeApiKey,
   onApiKeyChange,
   onExportAudit,
+  personas = [],
+  evaluationMode = false,
 }) {
   const modelName = projection?.runtime?.model?.value || 'gemini-3.5-flash';
   const docHash = projection?.header?.source_doc_hash;
@@ -50,6 +54,9 @@ export function Header({
   const confirmedAcks = acks.filter((a) => a.status === 'verified').length;
   const totalAcks = acks.length;
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+
+  const activePersona = personas.find((p) => p.key === activeApiKey);
+  const canReset = Boolean(activePersona?.can_reset);
 
   const unitsHeld =
     projection?.metrics?.provisional_hold_quantity ??
@@ -90,32 +97,68 @@ export function Header({
           </div>
 
           <div className="topbar-actions">
-            <select
-              value={activeApiKey || 'key-recall-coord-01'}
-              onChange={(e) => onApiKeyChange && onApiKeyChange(e.target.value)}
-              style={{ fontSize: '13px', padding: '6px 10px', maxWidth: '180px' }}
-              title="Acting role for signed decisions"
-            >
-              <option value="key-recall-coord-01">Recall Coordinator</option>
-              <option value="key-qa-lead-01">QA Lead</option>
-              <option value="key-ops-01">Customer Operations</option>
-              <option value="key-closure-auth-01">Closure Authority</option>
-              <option value="key-agent-svc-01">Agent Service</option>
-            </select>
+            {evaluationMode && personas && personas.length > 0 ? (
+              <select
+                value={activeApiKey || personas[0]?.key}
+                onChange={(e) => onApiKeyChange && onApiKeyChange(e.target.value)}
+                style={{ fontSize: '13px', padding: '6px 10px', maxWidth: '200px' }}
+                title="Acting role for signed decisions (Evaluation Mode)"
+                aria-label="Evaluation Persona Selector"
+              >
+                {personas.map((p) => (
+                  <option key={p.key} value={p.key}>
+                    {p.label}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span
+                className="badge-auth-status"
+                style={{
+                  fontSize: '12px',
+                  padding: '5px 9px',
+                  borderRadius: '4px',
+                  background: 'var(--bg-elevated, #24272f)',
+                  color: 'var(--text-secondary, #94a3b8)',
+                  border: '1px solid var(--border-subtle, #334155)',
+                }}
+                title="Authentication required for production deployment"
+              >
+                {hasEffectiveAuth(activeApiKey, evaluationMode)
+                  ? 'Authenticated'
+                  : 'Sign-in / API Key Required'}
+              </span>
+
+
+            )}
+
 
             <button
               className={`btn btn-primary ${!hasSignal && !loading ? 'btn-pulse' : ''}`}
               onClick={onSimulateSignal}
-              disabled={loading}
+              disabled={loading || (evaluationMode && activeApiKey !== 'key-recall-coord-01')}
+              title={
+                evaluationMode && activeApiKey !== 'key-recall-coord-01'
+                  ? 'Requires Recall Coordinator persona (select in top bar)'
+                  : 'Simulate and extract safety signal via Gemini'
+              }
             >
               <Sparkles size={14} />
               <span>Simulate signal</span>
             </button>
 
-            <button className="btn btn-ghost" onClick={() => setShowResetConfirm(true)} disabled={loading} title="Reset to clean baseline">
-              <RefreshCw size={14} />
-              <span>Reset State</span>
-            </button>
+
+            {canReset && (
+              <button
+                className="btn btn-ghost"
+                onClick={() => setShowResetConfirm(true)}
+                disabled={loading}
+                title="Reset to clean baseline (Evaluation Admin)"
+              >
+                <RefreshCw size={14} />
+                <span>Reset State</span>
+              </button>
+            )}
 
             <button className="btn btn-ghost" onClick={onExportAudit} disabled={loading} title="Download hash-chained audit bundle">
               <Download size={14} />
@@ -129,6 +172,7 @@ export function Header({
           </div>
         </div>
       </div>
+
 
       {/* Page header */}
       <div className="page">

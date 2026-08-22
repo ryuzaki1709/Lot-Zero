@@ -1,4 +1,4 @@
-"""Append-only cryptographic hash-chain ledger for incident provenance."""
+"""Cryptographic hash-chain ledger for incident provenance."""
 
 from __future__ import annotations
 

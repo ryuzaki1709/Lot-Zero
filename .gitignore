@@ -1,9 +1,11 @@
 # Dependencies
 node_modules/
 .venv/
+.venv-verify/
 venv/
 ENV/
 env/
+
 
 # Build artifacts
 dist/

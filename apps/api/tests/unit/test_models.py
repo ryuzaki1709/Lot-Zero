@@ -288,4 +288,3 @@ def test_ledger_cryptographic_chain_and_tamper_detection():
     tampered_chain = (ledger[0], ledger[1].model_copy(update={"prior_entry_hash": "broken_hash"}))
     with pytest.raises(InvariantViolation, match="Ledger hash-chain break"):
         verify_ledger(tampered_chain)
-

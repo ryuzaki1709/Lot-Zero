@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime
 from decimal import Decimal
+
 import pytest
 
 from lot_zero.domain.errors import InvariantViolation
@@ -9,7 +10,6 @@ from lot_zero.domain.events import ContainmentReleasedEvent, ContainmentRequeste
 from lot_zero.domain.models import ContainmentAction, IncidentState, RecallCase
 from lot_zero.domain.reducer import apply_event
 from lot_zero.domain.selectors import build_incident_projection
-from lot_zero.fixtures.loader import load_fixture, EvaluationFixture, Signal
 
 TENANT_ID = "EVAL-TENANT-01"
 CASE_ID = "EVAL-CASE-01"
@@ -76,7 +76,9 @@ def test_containment_released_event_rejects_unmaterialized_action():
         occurred_at=NOW,
     )
 
-    with pytest.raises(InvariantViolation, match="Cannot release unmaterialized containment action"):
+    with pytest.raises(
+        InvariantViolation, match="Cannot release unmaterialized containment action"
+    ):
         apply_event(state, event)
 
 
@@ -113,7 +115,9 @@ def test_containment_released_event_copies_authentic_target_action_data():
 
     state_after = apply_event(state_with_hold, release_event)
 
-    release_action = next(a for a in state_after.containment_actions if a.action_type == "release_hold")
+    release_action = next(
+        a for a in state_after.containment_actions if a.action_type == "release_hold"
+    )
     assert release_action.quantity == Decimal("456")
     assert release_action.target_record_ids == ("LOT-AUTH-A", "LOT-AUTH-B")
 
@@ -177,7 +181,9 @@ def test_genealogy_graph_adapts_to_scoped_ingredient_lot():
 async def test_simulate_signal_extraction_drives_genealogy_and_impact():
     """Drive the actual simulate-signal path with an extraction returning a different lot, and assert both the ingredient node and affected set reflect that lot consistently."""
     from unittest.mock import patch
+
     import httpx
+
     from lot_zero.app import app
     from lot_zero.domain.gemini_agent import ExtractedSignal
 
@@ -200,7 +206,7 @@ async def test_simulate_signal_extraction_drives_genealogy_and_impact():
         # Reset incident first
         res_reset = await client.post(
             "/api/evaluation/reset",
-            headers={"X-API-Key": "key-recall-coord-01"},
+            headers={"X-API-Key": "key-eval-admin-01"},
         )
         assert res_reset.status_code == 200
 
@@ -224,7 +230,9 @@ async def test_simulate_signal_extraction_drives_genealogy_and_impact():
             assert ingredient_nodes[0]["label"] == f"Organic Wheat Flour Lot {custom_extracted_lot}"
 
             supplier_edges = [
-                e for e in data["projection"]["genealogy"]["edges"] if e["from"] == "SUP-MILLER-2026-08"
+                e
+                for e in data["projection"]["genealogy"]["edges"]
+                if e["from"] == "SUP-MILLER-2026-08"
             ]
             assert len(supplier_edges) == 1
             assert supplier_edges[0]["to"] == custom_extracted_lot
@@ -238,7 +246,9 @@ async def test_simulate_signal_extraction_drives_genealogy_and_impact():
 async def test_simulate_signal_extraction_drives_pathogen_hazard():
     """Drive simulate-signal with an extraction returning a custom pathogen and assert the graph's hazard field follows it."""
     from unittest.mock import patch
+
     import httpx
+
     from lot_zero.app import app
     from lot_zero.domain.gemini_agent import ExtractedSignal
 
@@ -261,7 +271,7 @@ async def test_simulate_signal_extraction_drives_pathogen_hazard():
         # Reset incident first
         res_reset = await client.post(
             "/api/evaluation/reset",
-            headers={"X-API-Key": "key-recall-coord-01"},
+            headers={"X-API-Key": "key-eval-admin-01"},
         )
         assert res_reset.status_code == 200
 
@@ -322,6 +332,7 @@ def test_build_incident_projection_scope_missing_ingredient_lot_raises_invariant
 def test_notification_requested_event_omitted_recipients_raises_validation_error():
     """Verify that constructing NotificationRequestedEvent without recipient_ids raises ValidationError."""
     from pydantic import ValidationError
+
     from lot_zero.domain.events import NotificationRequestedEvent
 
     with pytest.raises(ValidationError):
@@ -344,6 +355,7 @@ def test_notification_requested_event_omitted_recipients_raises_validation_error
 def test_notification_requested_event_omitted_payload_hash_raises_validation_error():
     """Verify that constructing NotificationRequestedEvent without payload_hash raises ValidationError."""
     from pydantic import ValidationError
+
     from lot_zero.domain.events import NotificationRequestedEvent
 
     with pytest.raises(ValidationError):
@@ -404,15 +416,22 @@ async def test_full_lifecycle_route_1_dual_signature_release_replay_equality():
     construct fresh state by rehydrating the persisted event stream, and assert 100% field-for-field equality.
     """
     import httpx
-    from lot_zero.app import app, repository, DEFAULT_CASE_ID
 
-    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+    from lot_zero.app import DEFAULT_CASE_ID, app, repository
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
         # Reset
-        res_reset = await client.post("/api/evaluation/reset", headers={"X-API-Key": "key-recall-coord-01"})
+        res_reset = await client.post(
+            "/api/evaluation/reset", headers={"X-API-Key": "key-eval-admin-01"}
+        )
         assert res_reset.status_code == 200
 
         # 1. Simulate signal
-        res_sig = await client.post("/api/evaluation/simulate-signal", headers={"X-API-Key": "key-recall-coord-01"})
+        res_sig = await client.post(
+            "/api/evaluation/simulate-signal", headers={"X-API-Key": "key-recall-coord-01"}
+        )
         assert res_sig.status_code == 200
 
         # 2. QA Lead approves containment
@@ -423,8 +442,26 @@ async def test_full_lifecycle_route_1_dual_signature_release_replay_equality():
         )
         assert res_app.status_code == 200
 
+        # 2b. Customer Operations approves notification
+        res_notif = await client.post(
+            "/api/evaluation/approve-notification",
+            headers={"X-API-Key": "key-ops-01"},
+            json={
+                "packet_id": "PKT-001",
+                "payload_version": "PAYLOAD-001",
+                "payload_hash": "payload-sha256-verified-digest",
+                "scope_id": "SCOPE-EVAL-01",
+                "scope_version": 1,
+                "policy_version": "EVAL-HOLD-01",
+                "rationale": "Customer Operations approves notification packet.",
+            },
+        )
+        assert res_notif.status_code == 200
+
         # 3. Customer Operations dispatches outbox
-        res_out = await client.post("/api/evaluation/dispatch-outbox", headers={"X-API-Key": "key-ops-01"})
+        res_out = await client.post(
+            "/api/evaluation/dispatch-outbox", headers={"X-API-Key": "key-ops-01"}
+        )
         assert res_out.status_code == 200
 
         # 4. Resolve ACK-006 via phone attestation
@@ -465,8 +502,23 @@ async def test_full_lifecycle_route_1_dual_signature_release_replay_equality():
         )
         assert res_rel2.status_code == 200
 
-        # 7. Request closure -> closed
-        res_close = await client.post("/api/evaluation/request-closure", headers={"X-API-Key": "key-recall-coord-01"})
+        # 7. Request closure as Recall Coordinator
+        res_req = await client.post(
+            "/api/evaluation/request-closure", headers={"X-API-Key": "key-recall-coord-01"}
+        )
+        assert res_req.status_code == 200
+        req_id = res_req.json()["request_id"]
+
+        # 8. Authorize closure as Closure Authority
+        res_close = await client.post(
+            "/api/evaluation/authorize-closure",
+            headers={"X-API-Key": "key-closure-auth-01"},
+            json={
+                "request_id": req_id,
+                "rationale": "All criteria met for closure",
+                "effectiveness_evidence_ids": ["EVID-01"],
+            },
+        )
         assert res_close.status_code == 200
         assert res_close.json()["status"] == "closed"
 
@@ -489,15 +541,22 @@ async def test_full_lifecycle_route_2_non_response_closure_replay_equality():
     construct fresh state by rehydrating the persisted event stream, and assert 100% field-for-field equality.
     """
     import httpx
-    from lot_zero.app import app, repository, DEFAULT_CASE_ID
 
-    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+    from lot_zero.app import DEFAULT_CASE_ID, app, repository
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
         # Reset
-        res_reset = await client.post("/api/evaluation/reset", headers={"X-API-Key": "key-recall-coord-01"})
+        res_reset = await client.post(
+            "/api/evaluation/reset", headers={"X-API-Key": "key-eval-admin-01"}
+        )
         assert res_reset.status_code == 200
 
         # 1. Simulate signal
-        res_sig = await client.post("/api/evaluation/simulate-signal", headers={"X-API-Key": "key-recall-coord-01"})
+        res_sig = await client.post(
+            "/api/evaluation/simulate-signal", headers={"X-API-Key": "key-recall-coord-01"}
+        )
         assert res_sig.status_code == 200
 
         # 2. QA Lead approves containment
@@ -508,22 +567,48 @@ async def test_full_lifecycle_route_2_non_response_closure_replay_equality():
         )
         assert res_app.status_code == 200
 
+        # 2b. Customer Operations approves notification
+        res_notif = await client.post(
+            "/api/evaluation/approve-notification",
+            headers={"X-API-Key": "key-ops-01"},
+            json={
+                "packet_id": "PKT-001",
+                "payload_version": "PAYLOAD-001",
+                "payload_hash": "payload-sha256-verified-digest",
+                "scope_id": "SCOPE-EVAL-01",
+                "scope_version": 1,
+                "policy_version": "EVAL-HOLD-01",
+                "rationale": "Customer Operations approves notification packet.",
+            },
+        )
+        assert res_notif.status_code == 200
+
         # 3. Customer Operations dispatches outbox
-        res_out = await client.post("/api/evaluation/dispatch-outbox", headers={"X-API-Key": "key-ops-01"})
+        res_out = await client.post(
+            "/api/evaluation/dispatch-outbox", headers={"X-API-Key": "key-ops-01"}
+        )
         assert res_out.status_code == 200
 
-        # 4. Close under 21 CFR § 7.49 non-response
+        # 4. Request closure as Recall Coordinator
+        res_req = await client.post(
+            "/api/evaluation/request-closure", headers={"X-API-Key": "key-recall-coord-01"}
+        )
+        assert res_req.status_code == 200
+        req_id = res_req.json()["request_id"]
+
+        # 5. Close under 21 CFR § 7.49 non-response
         res_close = await client.post(
             "/api/evaluation/close-with-non-response",
             headers={"X-API-Key": "key-closure-auth-01"},
             json={
+                "request_id": req_id,
                 "attempt_count": 3,
                 "regulatory_filing_id": "FDA-REF-2026-0814-001",
                 "good_faith_notes": "Documented 3 certified contact attempts; referred to FDA District Office.",
             },
         )
         assert res_close.status_code == 200
-        assert res_close.json()["status"] == "closed_documented_non_response"
+        assert res_close.json()["status"] == "closed"
 
         # Obtain live state from memory and rehydrated state from persistent SQLite event store
         from lot_zero.app import current_state as live_state
@@ -535,6 +620,3 @@ async def test_full_lifecycle_route_2_non_response_closure_replay_equality():
         assert live_state.case.phase == "closed"
         assert loaded_state.case.phase == "closed"
         assert live_state == loaded_state
-
-
-

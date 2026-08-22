@@ -5,7 +5,6 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
 
-from ..domain.events import EventRecord
 from ..domain.models import IncidentState
 
 
@@ -26,7 +25,9 @@ class IncidentRepository(ABC):
     """Abstract store for event-sourced incident streams."""
 
     @abstractmethod
-    async def load(self, case_id: str) -> IncidentState | None:
+    async def load(
+        self, case_id: str, *, tenant_id: str = "EVAL-TENANT-01"
+    ) -> IncidentState | None:
         """Reconstruct the current state of a case by replaying events, or None if not found."""
         raise NotImplementedError
 
@@ -35,7 +36,9 @@ class IncidentRepository(ABC):
         self,
         case_id: str,
         expected_version: int,
-        events: Sequence[EventRecord],
+        events: Sequence[object],
+        *,
+        tenant_id: str = "EVAL-TENANT-01",
     ) -> IncidentState:
         """Append events with optimistic concurrency check, returning new state."""
         raise NotImplementedError
@@ -45,6 +48,8 @@ class IncidentRepository(ABC):
         self,
         case_id: str,
         after_sequence: int = 0,
-    ) -> Sequence[EventRecord]:
+        *,
+        tenant_id: str = "EVAL-TENANT-01",
+    ) -> Sequence[object]:
         """Fetch all events after a given sequence number."""
         raise NotImplementedError

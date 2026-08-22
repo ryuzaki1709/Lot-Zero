@@ -62,7 +62,7 @@ export function ResetConfirmModal({ isOpen, onClose, onConfirm, loading }) {
         </div>
 
         <p style={{ color: 'var(--text-secondary)', fontSize: '13px', lineHeight: 1.5, margin: '12px 0 16px' }}>
-          This action permanently deletes all recorded incident events and cryptographic ledger entries from the persistent SQLite event store. The incident case will return to the unseeded baseline (<code style={{ fontSize: '12px', background: 'var(--bg-surface-subtle)', padding: '2px 4px', borderRadius: '4px' }}>phase: signal_received</code>).
+          The active evaluation run will be archived, then the case will return to its clean baseline (<code style={{ fontSize: '12px', background: 'var(--bg-surface-subtle)', padding: '2px 4px', borderRadius: '4px' }}>phase: signal_received</code>). The archived run remains available for audit verification but is removed from the active demo view.
         </p>
 
         <div style={{
@@ -71,14 +71,15 @@ export function ResetConfirmModal({ isOpen, onClose, onConfirm, loading }) {
           borderRadius: 'var(--radius-sm)',
           padding: '10px 12px',
           fontSize: '12px',
-          color: 'var(--status-danger)',
+          color: 'var(--text-muted)',
           marginBottom: '20px',
           display: 'flex',
           alignItems: 'center',
           gap: '6px'
         }}>
-          <strong>Warning:</strong> This cannot be undone.
+          <strong>Note:</strong> Evaluation Administrator capability only.
         </div>
+
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
           <button

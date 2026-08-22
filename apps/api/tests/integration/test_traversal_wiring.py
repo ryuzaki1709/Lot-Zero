@@ -2,6 +2,7 @@
 
 from datetime import date
 from decimal import Decimal
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 
@@ -9,7 +10,6 @@ from lot_zero.app import app
 from lot_zero.domain.genealogy import GenealogyEdge, InventoryRecord, ShipmentRecord
 from lot_zero.domain.recall import FinishedLot, compute_impact
 from lot_zero.domain.scope import RecallScope, ScopePredicate
-from lot_zero.domain.selectors import build_incident_projection
 from lot_zero.fixtures.loader import load_fixture
 
 TENANT_ID = "EVAL-TENANT-01"
@@ -120,7 +120,10 @@ def test_graph_traversal_matches_golden_oracle():
     assert int(impact.affected_inventory_quantity) == fixture.golden.affected_inventory_quantity
     assert int(impact.affected_shipped_quantity) == fixture.golden.affected_shipped_quantity
     assert int(impact.unaffected_hold_quantity) == fixture.golden.unaffected_hold_quantity
-    assert tuple(e.edge_id for e in impact.unresolved_edges) == fixture.golden.unresolved_genealogy_edge_ids
+    assert (
+        tuple(e.edge_id for e in impact.unresolved_edges)
+        == fixture.golden.unresolved_genealogy_edge_ids
+    )
 
     # Real negative control assertion (Zero false holds)
     assert "FP-100-ADJ" not in impact.affected_finished_lot_ids
@@ -133,20 +136,33 @@ async def test_simulate_signal_endpoint_wires_traversal_and_surfaces_unresolved_
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         # Reset state first
-        reset_res = await client.post("/api/evaluation/reset", headers={"X-API-Key": "key-recall-coord-01"})
+        reset_res = await client.post(
+            "/api/evaluation/reset", headers={"X-API-Key": "key-eval-admin-01"}
+        )
         assert reset_res.status_code == 200
 
         # Simulate signal
-        sim_res = await client.post("/api/evaluation/simulate-signal", headers={"X-API-Key": "key-recall-coord-01"})
+        sim_res = await client.post(
+            "/api/evaluation/simulate-signal", headers={"X-API-Key": "key-recall-coord-01"}
+        )
         assert sim_res.status_code == 200
         data = sim_res.json()
         projection = data["projection"]
 
         # Assert traversal-derived metrics
         fixture = load_fixture("evaluation-tenant-v1")
-        assert projection["metrics"]["affected_inventory_quantity"] == fixture.golden.affected_inventory_quantity
-        assert projection["metrics"]["unaffected_hold_quantity"] == fixture.golden.unaffected_hold_quantity
-        assert projection["metrics"]["unaffected_cleared_quantity"] == fixture.operations.adjacent_unaffected_batch.quantity
+        assert (
+            projection["metrics"]["affected_inventory_quantity"]
+            == fixture.golden.affected_inventory_quantity
+        )
+        assert (
+            projection["metrics"]["unaffected_hold_quantity"]
+            == fixture.golden.unaffected_hold_quantity
+        )
+        assert (
+            projection["metrics"]["unaffected_cleared_quantity"]
+            == fixture.operations.adjacent_unaffected_batch.quantity
+        )
 
         # Assert unresolved edges are surfaced in genealogy projection
         unresolved = projection["genealogy"]["unresolved_edges"]
