@@ -138,8 +138,12 @@ def analyze_safety_signal(
             from google import genai
             from google.genai import types
 
-            project = os.getenv("GOOGLE_CLOUD_PROJECT", "project-b2c3348e-d718-4255-be2")
-            location = os.getenv("GOOGLE_CLOUD_LOCATION", "global")
+            project = os.getenv("GOOGLE_CLOUD_PROJECT", "").strip()
+            if not project:
+                raise ValueError(
+                    "GOOGLE_CLOUD_PROJECT environment variable is required for Vertex AI mode."
+                )
+            location = os.getenv("GOOGLE_CLOUD_LOCATION", "global").strip() or "global"
             client = genai.Client(vertexai=True, project=project, location=location)
 
             response = client.models.generate_content(
@@ -157,10 +161,23 @@ def analyze_safety_signal(
             is_live_model = True
             logger.info("Gemini live extraction on Vertex AI succeeded.")
         except Exception as e:
-            logger.warning(
-                "Vertex AI extraction failed, falling back to deterministic: %s", type(e).__name__
+            err_class = type(e).__name__
+            logger.warning("Vertex AI extraction failed: %s", err_class)
+            return ExtractedSignal(
+                source_id=source_id,
+                ingredient_lot="",
+                pathogen="",
+                spans=(),
+                recommended_scope_records=(),
+                extracted_at=now,
+                model_version=f"gemini-3.5-flash (Vertex AI Failure: {err_class})",
+                doc_hash=doc_hash,
+                is_live_model=False,
+                is_grounded=False,
+                status="needs_review",
+                discarded_claims=(),
+                raw_text=raw_notice_text,
             )
-            model_tag = f"gemini-3.5-flash (Vertex AI Fallback: {type(e).__name__})"
     elif gemini_key:
         try:
             from google import genai
@@ -183,13 +200,25 @@ def analyze_safety_signal(
             is_live_model = True
             logger.info("Gemini live extraction on Google GenAI API succeeded.")
         except Exception as e:
-            logger.warning(
-                "Google GenAI extraction failed, falling back to deterministic: %s",
-                type(e).__name__,
+            err_class = type(e).__name__
+            logger.warning("Google GenAI extraction failed: %s", err_class)
+            return ExtractedSignal(
+                source_id=source_id,
+                ingredient_lot="",
+                pathogen="",
+                spans=(),
+                recommended_scope_records=(),
+                extracted_at=now,
+                model_version=f"gemini-3.5-flash (Google GenAI Failure: {err_class})",
+                doc_hash=doc_hash,
+                is_live_model=False,
+                is_grounded=False,
+                status="needs_review",
+                discarded_claims=(),
+                raw_text=raw_notice_text,
             )
-            model_tag = f"gemini-3.5-flash (Google GenAI Fallback: {type(e).__name__})"
 
-    # Fallback to deterministic parser if live model didn't run or failed
+    # Intentional deterministic replay only if live mode or API key was not configured
     if parsed_result is None:
         det_lot, det_pathogen, det_claims = _deterministic_extract(raw_notice_text)
         parsed_result = SignalAnalysisSchema(

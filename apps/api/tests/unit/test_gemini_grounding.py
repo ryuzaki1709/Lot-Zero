@@ -77,7 +77,11 @@ def test_hallucinated_claims_rejected():
     )
 
     with patch("lot_zero.domain.gemini_agent.os.getenv") as mock_env:
-        mock_env.side_effect = lambda k, d="": "true" if k == "GOOGLE_GENAI_USE_VERTEXAI" else d
+        mock_env.side_effect = lambda k, d="": (
+            "true"
+            if k == "GOOGLE_GENAI_USE_VERTEXAI"
+            else ("test-mock-project" if k == "GOOGLE_CLOUD_PROJECT" else d)
+        )
         with patch("google.genai.Client") as mock_client_cls:
             mock_client = MagicMock()
             mock_client_cls.return_value = mock_client
@@ -128,3 +132,88 @@ def test_changing_document_changes_doc_hash_and_offsets():
             RAW_TEXT[orig_span.start_offset : orig_span.end_offset]
             == shifted_doc[shifted_span.start_offset : shifted_span.end_offset]
         )
+
+
+def test_no_developer_project_id_embedded():
+    """Verify that no hardcoded developer project ID is present in source code or defaults."""
+    import inspect
+
+    from lot_zero.domain import gemini_agent
+
+    source = inspect.getsource(gemini_agent)
+    assert "project-b2c3348e-d718-4255-be2" not in source
+
+
+def test_missing_vertex_project_returns_review_failure(monkeypatch):
+    """Verify that when Vertex is enabled but GOOGLE_CLOUD_PROJECT is missing, it returns review status with zero spans."""
+    monkeypatch.setenv("GOOGLE_GENAI_USE_VERTEXAI", "true")
+    monkeypatch.delenv("GOOGLE_CLOUD_PROJECT", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+
+    extracted = analyze_safety_signal(RAW_TEXT)
+
+    assert extracted.status == "needs_review"
+    assert extracted.is_grounded is False
+    assert extracted.is_live_model is False
+    assert extracted.spans == ()
+    assert extracted.recommended_scope_records == ()
+    assert "Vertex AI Failure: ValueError" in extracted.model_version
+
+
+def test_vertex_sdk_exception_returns_review_failure(monkeypatch):
+    """Verify that when Vertex SDK raises an exception, it returns review status with zero spans."""
+    from unittest.mock import MagicMock, patch
+
+    monkeypatch.setenv("GOOGLE_GENAI_USE_VERTEXAI", "true")
+    monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "test-project")
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+
+    with patch("google.genai.Client") as mock_client_cls:
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+        mock_client.models.generate_content.side_effect = RuntimeError("Service connection error")
+
+        extracted = analyze_safety_signal(RAW_TEXT)
+
+    assert extracted.status == "needs_review"
+    assert extracted.is_grounded is False
+    assert extracted.is_live_model is False
+    assert extracted.spans == ()
+    assert "Vertex AI Failure: RuntimeError" in extracted.model_version
+
+
+def test_genai_sdk_exception_returns_review_failure(monkeypatch):
+    """Verify that when Google GenAI SDK raises an exception, it returns review status with zero spans."""
+    from unittest.mock import MagicMock, patch
+
+    monkeypatch.delenv("GOOGLE_GENAI_USE_VERTEXAI", raising=False)
+    monkeypatch.setenv("GEMINI_API_KEY", "fake-test-key")
+
+    with patch("google.genai.Client") as mock_client_cls:
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+        mock_client.models.generate_content.side_effect = ConnectionError("Connection refused")
+
+        extracted = analyze_safety_signal(RAW_TEXT)
+
+    assert extracted.status == "needs_review"
+    assert extracted.is_grounded is False
+    assert extracted.is_live_model is False
+    assert extracted.spans == ()
+    assert "Google GenAI Failure: ConnectionError" in extracted.model_version
+
+
+def test_deterministic_replay_functional(monkeypatch):
+    """Verify that pure deterministic replay is functional when Vertex/GenAI are disabled."""
+    monkeypatch.delenv("GOOGLE_GENAI_USE_VERTEXAI", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+
+    extracted = analyze_safety_signal(RAW_TEXT)
+
+    assert extracted.ingredient_lot == "ING-4417"
+    assert "Salmonella" in extracted.pathogen
+    assert extracted.model_version == "gemini-3.5-flash (Deterministic Replay)"
+    assert extracted.is_live_model is False
+    assert extracted.is_grounded is True
+    assert extracted.status == "grounded"
+    assert len(extracted.spans) > 0

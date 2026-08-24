@@ -1,14 +1,14 @@
 flowchart TB
     subgraph CLIENT["Client Layer: Browser SPA (React + Vite)"]
-        UI_COCKPIT["Role-Based Cockpit<br/>(Recall Coord, QA Lead, Ops, Closure Auth)"]
+        UI_COCKPIT["Role-Based Cockpit<br/>(5 Evaluation Personas)"]
         UI_RAIL["Dual-Signature Release Rail<br/>(Sequential Biological & Inventory Gate)"]
         UI_SSE["Real-Time Stream Consumer<br/>(Ephemeral HMAC-Signed Token)"]
         UI_AUDIT["Audit Export & Ledger Inspector"]
     end
 
-    subgraph SECRETS["Google Cloud Secret Manager"]
-        SEC_GEMINI["GEMINI_API_KEY"]
-        SEC_SSE["LOT_ZERO_SSE_SECRET"]
+    subgraph CONFIG["Runtime Environment Configuration"]
+        ENV_GEMINI["GEMINI_API_KEY / Vertex Config"]
+        ENV_SSE["LOT_ZERO_SSE_SECRET"]
     end
 
     subgraph GENAI["Google AI Services"]
@@ -24,12 +24,12 @@ flowchart TB
         SSE_HUB["Server-Sent Events Broadcast Hub<br/>(60s Ephemeral HMAC Token Auth)"]
     end
 
-    subgraph STORAGE["Google Cloud Storage (GCS FUSE Volume Mount)"]
-        SQLITE_DB["Persistent SQLite Event Store (/app/data/lot_zero.db)<br/>• incident_events (Append-Only Log)<br/>• optimistic concurrency via expected_version"]
+    subgraph STORAGE["Container Storage (Local SQLite Event Store)"]
+        SQLITE_DB["SQLite Event Store (/tmp/lot_zero.db)<br/>• incident_events (Append-Oriented Log)<br/>• Optimistic concurrency via case_version"]
     end
 
-    subgraph AUDITOR["Regulatory Compliance & External Auditor"]
-        BUNDLE["Tamper-Evident Audit Export Bundle<br/>(21 CFR § 7.49 Non-Response & Hash Chain)"]
+    subgraph AUDITOR["Regulatory Evidence & Audit Verification"]
+        BUNDLE["Tamper-Evident Audit Export Bundle<br/>(Modeled § 7.49 Non-Response & SHA-256 Hash Chain)"]
     end
 
     %% Interactions
@@ -38,7 +38,7 @@ flowchart TB
     UI_SSE <-->|Live Event Stream / HMAC Token| SSE_HUB
     UI_AUDIT -->|GET /api/cases/{id}/audit-export| API_ROUTER
 
-    SECRETS -.->|Injected Environment Variables| CLOUD_RUN
+    CONFIG -.->|Injected Environment Variables| CLOUD_RUN
 
     API_ROUTER --> AUTH_KERNEL
     AUTH_KERNEL -->|Simulate Signal| GEMINI

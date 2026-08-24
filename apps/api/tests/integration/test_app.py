@@ -706,3 +706,41 @@ def test_closure_with_invented_evidence_ids_denied(client):
     assert res_bad_auth.status_code == 200
     assert res_bad_auth.json()["status"] == "closure_blocked"
     assert res_bad_auth.json()["code"] == "UNKNOWN_EVIDENCE_ID"
+
+
+def test_simulate_signal_live_model_failure_causes_zero_mutation(client, monkeypatch):
+    """When live Vertex mode is enabled but fails, simulate-signal must produce zero state mutation and zero events."""
+    from lot_zero.app import current_state
+
+    # 1. Capture initial baseline
+    initial_version = current_state.case.case_version
+    initial_phase = current_state.case.phase
+
+    # Audit export returns 404 on clean baseline before events exist
+    res_initial_audit = client.get(
+        "/api/cases/EVAL-CASE-01/audit-export", headers={"X-API-Key": KEY_QA}
+    )
+    assert res_initial_audit.status_code == 404
+
+    # 2. Configure broken Vertex mode (missing project)
+    monkeypatch.setenv("GOOGLE_GENAI_USE_VERTEXAI", "true")
+    monkeypatch.delenv("GOOGLE_CLOUD_PROJECT", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+
+    res = client.post("/api/evaluation/simulate-signal", headers={"X-API-Key": KEY_COORD})
+    assert res.status_code == 200
+    data = res.json()
+    assert data["status"] == "needs_review"
+
+    # 3. Assert zero state mutation and zero events appended
+    assert current_state.case.case_version == initial_version
+    assert current_state.case.phase == initial_phase
+    assert len(current_state.containment_actions) == 0
+    assert len(current_state.scopes) == 0
+    assert len(current_state.ledger) == 0
+
+    # Audit export still returns 404 proving zero events were appended
+    res_after_audit = client.get(
+        "/api/cases/EVAL-CASE-01/audit-export", headers={"X-API-Key": KEY_QA}
+    )
+    assert res_after_audit.status_code == 404
