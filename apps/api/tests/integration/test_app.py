@@ -49,6 +49,31 @@ def test_authentication_and_api_key_guards(client):
     res_valid = client.get("/api/incidents/EVAL-CASE-01", headers={"X-API-Key": KEY_QA})
     assert res_valid.status_code == 200
 
+    # 4. Internal agent service key succeeds for authenticated incident read
+    res_agent = client.get("/api/incidents/EVAL-CASE-01", headers={"X-API-Key": KEY_AGENT})
+    assert res_agent.status_code == 200
+
+
+def test_config_endpoint_exposes_five_human_personas_excluding_agent_svc(client):
+    """Verify /api/config exposes exactly 5 human personas and excludes internal agent-service."""
+    res = client.get("/api/config")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["evaluation_mode"] is True
+    personas = data["personas"]
+    assert len(personas) == 5
+
+    principal_ids = {p["principal_id"] for p in personas}
+    assert principal_ids == {
+        "RECALL-COORD-01",
+        "QA-LEAD-01",
+        "OPS-001",
+        "CLOSURE-AUTH-01",
+        "EVAL-ADMIN-01",
+    }
+    assert "AGENT-SVC-01" not in principal_ids
+    assert not any(p["key"] == "key-agent-svc-01" for p in personas)
+
 
 def test_get_incident_projection_and_access_audit(client):
     res = client.get("/api/incidents/EVAL-CASE-01", headers={"X-API-Key": KEY_QA})

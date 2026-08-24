@@ -108,13 +108,6 @@ def get_evaluation_personas() -> list[dict[str, Any]]:
             "can_reset": False,
         },
         {
-            "key": "key-agent-svc-01",
-            "principal_id": "AGENT-SVC-01",
-            "label": "Agent Service",
-            "role": "agent_service",
-            "can_reset": False,
-        },
-        {
             "key": "key-eval-admin-01",
             "principal_id": "EVAL-ADMIN-01",
             "label": "Evaluation Administrator",
