@@ -13,22 +13,38 @@ import {
 export function ApprovalGate({
   phase,
   onApproveContainment,
+  onRequestNotification,
+  onApproveNotification,
   onDispatchOutbox,
   onRequestClosure,
+  onAuthorizeClosure,
   onResolveAck,
   onReleaseHold,
   onCloseWithNonResponse,
   loading,
-  approvals,
+  approvals = [],
   closureGate,
   containmentActions = [],
+  packets = [],
+  closureRequests = [],
+  activeApiKey = '',
+  evaluationMode = false,
 }) {
   const [rationale, setRationale] = useState(
     'Authorized containment under policy EVAL-HOLD-01 based on positive lab Salmonella finding.'
   );
+  const [notifRationale, setNotifRationale] = useState(
+    'Notification packet PKT-001 payload verified against scope SCOPE-EVAL-01 for outbox delivery.'
+  );
   const [isPhoneModalOpen, setIsPhoneModalOpen] = useState(false);
   const [isReleaseModalOpen, setIsReleaseModalOpen] = useState(false);
   const [isNonResponseModalOpen, setIsNonResponseModalOpen] = useState(false);
+
+  // Persona capabilities in evaluation mode
+  const isRecallCoordinator = !evaluationMode || activeApiKey === 'key-recall-coord-01';
+  const isQaLead = !evaluationMode || activeApiKey === 'key-qa-lead-01';
+  const isCustomerOps = !evaluationMode || activeApiKey === 'key-ops-01';
+  const isClosureAuth = !evaluationMode || activeApiKey === 'key-closure-auth-01';
 
   // Phone Attestation Form State
   const [callerId, setCallerId] = useState('OPS-001 (Sarah Jenkins, Customer Operations)');
@@ -44,11 +60,11 @@ export function ApprovalGate({
   const [qaRationale, setQaRationale] = useState('Lab re-test SPL-99824-B satisfies negative culture release criterion under FDA BAM Ch. 5.');
   const [coordRationale, setCoordRationale] = useState('Confirmed re-test documentation attached and validated with lab director. Authorizing inventory release.');
 
-  // Non-Response 21 CFR § 7.49 Form State
-  const [regFilingId, setRegFilingId] = useState('FDA-NONRESP-2026-0814-06');
+  // Synthetic Non-Response Documentation State
+  const [regFilingId, setRegFilingId] = useState('MODEL-NONRESP-2026-0814-06');
   const [attemptCount, setAttemptCount] = useState(3);
   const [goodFaithNotes, setGoodFaithNotes] = useState(
-    '3 documented phone/certified mail outreach attempts without response. Escalated to FDA District Office pursuant to 21 CFR § 7.49.'
+    '3 documented phone/outreach attempts without response. Recorded modeled referral note pursuant to internal protocol (not a legal or regulatory certification).'
   );
 
   // Refs for modal focus management
@@ -57,8 +73,20 @@ export function ApprovalGate({
   const nonResponseFirstInputRef = useRef(null);
 
   const isQaApproved = approvals?.some((a) => a.decision === 'approved' && a.approval_type === 'containment');
+
+  // Notification Packet lifecycle
+  const plannedPacket = packets?.find((p) => p.packet_id === 'PKT-001' || p.status === 'planned') || packets?.[0];
+  const isPacketRequested = Boolean(plannedPacket);
+  const notifApproval = approvals?.find((a) => a.decision === 'approved' && a.approval_type === 'notification');
+  const isNotificationApproved = Boolean(notifApproval);
+
   const isOutboxDispatched = ['ack_monitoring', 'effectiveness_check', 'closed'].includes(phase);
   const isAckResolved = !closureGate?.is_blocked && isOutboxDispatched;
+
+  // Closure Request & Authorization lifecycle
+  const activeClosureReq = closureRequests?.find((r) => r.status === 'pending') ||
+    (closureGate?.has_active_request ? { request_id: closureGate.active_request_id } : null);
+  const isClosureRequested = Boolean(activeClosureReq);
   const isClosed = phase === 'closed';
 
   // Dual-signature detection from projection approvals
@@ -138,6 +166,19 @@ export function ApprovalGate({
     setIsNonResponseModalOpen(false);
   };
 
+  const handleApproveNotifClick = () => {
+    if (!onApproveNotification || !plannedPacket) return;
+    onApproveNotification({
+      packet_id: plannedPacket.packet_id,
+      scope_id: plannedPacket.scope_id,
+      scope_version: plannedPacket.scope_version,
+      payload_version: plannedPacket.payload_version,
+      payload_hash: plannedPacket.payload_hash,
+      policy_version: plannedPacket.policy_version || 'EVAL-HOLD-01',
+      rationale: notifRationale,
+    });
+  };
+
   return (
     <div className="card-panel" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
       {/* Header */}
@@ -160,7 +201,7 @@ export function ApprovalGate({
 
       {/* Decision Actions Grid */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-        {/* Gate 1: QA Containment Approval with Inline Rationale Input (Group 4c) */}
+        {/* Gate 1: QA Containment Approval */}
         <div
           style={{
             background: 'var(--bg-surface-subtle)',
@@ -185,24 +226,29 @@ export function ApprovalGate({
             <button
               className={`btn ${!isQaApproved && !isClosed ? 'btn-primary' : 'btn-secondary'}`}
               onClick={() => onApproveContainment(rationale)}
-              disabled={loading || isQaApproved || isClosed}
-              title="QA Lead sign-off: converts provisional 30m soft hold into authorized firm quarantine"
+              disabled={loading || isQaApproved || isClosed || (!isQaLead && evaluationMode)}
+              title={
+                !isQaLead && evaluationMode
+                  ? 'Requires QA Lead persona (select in top bar)'
+                  : 'QA Lead sign-off: converts provisional 30m soft hold into authorized firm quarantine'
+              }
             >
               <Lock size={13} />
-              {isQaApproved ? 'Quarantine Approved' : 'Approve Firm Quarantine (QA)'}
+              {isQaApproved ? 'Quarantine Approved (QA)' : 'Approve Firm Quarantine (QA)'}
             </button>
           </div>
 
           {!isQaApproved && !isClosed && (
             <div style={{ marginTop: '4px' }}>
               <label className="section-label" style={{ display: 'block', marginBottom: '4px', fontSize: '10px' }}>
-                QA Approval Rationale (Immutably logged to audit stream)
+                QA Approval Rationale (Logged to the append-oriented audit event stream)
               </label>
+
               <textarea
                 value={rationale}
                 onChange={(e) => setRationale(e.target.value)}
                 rows={2}
-                disabled={isClosed}
+                disabled={isClosed || (!isQaLead && evaluationMode)}
                 style={{ width: '100%', resize: 'vertical', fontSize: '12px', lineHeight: '1.4' }}
                 placeholder="Enter QA approval rationale..."
               />
@@ -210,7 +256,7 @@ export function ApprovalGate({
           )}
         </div>
 
-        {/* Gate 2: Dispatch Outbox */}
+        {/* Gate 2a: Request / Draft Notification Packet */}
         <div
           style={{
             background: 'var(--bg-surface-subtle)',
@@ -226,7 +272,101 @@ export function ApprovalGate({
         >
           <div>
             <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-primary)' }}>
-              2. Dispatch Recall Outbox
+              2a. Draft & Request Notification Packet
+            </div>
+            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+              Role: <span style={{ color: 'var(--text-secondary)' }}>Recall Coordinator</span> — Creates persisted notification packet request for consignees.
+            </div>
+          </div>
+
+          <button
+            className="btn btn-secondary"
+            onClick={onRequestNotification}
+            disabled={loading || !isQaApproved || isPacketRequested || isClosed || (!isRecallCoordinator && evaluationMode)}
+            title={
+              !isRecallCoordinator && evaluationMode
+                ? 'Requires Recall Coordinator persona (select in top bar)'
+                : 'Recall Coordinator: create persisted notification packet request'
+            }
+          >
+            <FileCheck size={13} />
+            {isPacketRequested ? 'Packet PKT-001 Requested' : 'Request Notification Packet (Coord)'}
+          </button>
+        </div>
+
+        {/* Gate 2b: Review & Approve Notification Packet */}
+        <div
+          style={{
+            background: 'var(--bg-surface-subtle)',
+            border: '1px solid var(--border-subtle)',
+            borderRadius: 'var(--radius-md)',
+            padding: '12px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-primary)' }}>
+                2b. Review & Approve Notification Packet
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                Role: <span style={{ color: 'var(--text-secondary)' }}>Customer Operations</span> — Authorizes outbound consignee notification payload.
+              </div>
+            </div>
+
+            <button
+              className={`btn ${!isNotificationApproved && isPacketRequested && !isClosed ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={handleApproveNotifClick}
+              disabled={loading || !isPacketRequested || isNotificationApproved || isClosed || (!isCustomerOps && evaluationMode)}
+              title={
+                !isCustomerOps && evaluationMode
+                  ? 'Requires Customer Operations persona (select in top bar)'
+                  : !isPacketRequested
+                  ? 'Awaiting Recall Coordinator notification packet request'
+                  : 'Customer Operations: authorize outbound notification packet'
+              }
+            >
+              <CheckCircle2 size={13} />
+              {isNotificationApproved ? 'Notification Approved (Ops)' : 'Approve Notification Packet (Ops)'}
+            </button>
+          </div>
+
+          {isPacketRequested && !isNotificationApproved && !isClosed && (
+            <div style={{ marginTop: '4px' }}>
+              <label className="section-label" style={{ display: 'block', marginBottom: '4px', fontSize: '10px' }}>
+                Customer Operations Rationale ({plannedPacket?.packet_id || 'PKT-001'})
+              </label>
+              <textarea
+                value={notifRationale}
+                onChange={(e) => setNotifRationale(e.target.value)}
+                rows={2}
+                disabled={isClosed || (!isCustomerOps && evaluationMode)}
+                style={{ width: '100%', resize: 'vertical', fontSize: '12px', lineHeight: '1.4' }}
+                placeholder="Enter Customer Operations approval rationale..."
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Gate 2c: Dispatch Outbox */}
+        <div
+          style={{
+            background: 'var(--bg-surface-subtle)',
+            border: '1px solid var(--border-subtle)',
+            borderRadius: 'var(--radius-md)',
+            padding: '12px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '8px',
+          }}
+        >
+          <div>
+            <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-primary)' }}>
+              2c. Dispatch Recall Outbox
             </div>
             <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
               Role: <span style={{ color: 'var(--text-secondary)' }}>Customer Operations</span> — Dispatches formal recall notices to all consignees.
@@ -236,8 +376,14 @@ export function ApprovalGate({
           <button
             className="btn btn-secondary"
             onClick={onDispatchOutbox}
-            disabled={loading || !isQaApproved || isOutboxDispatched || isClosed}
-            title="Customer Operations sign-off: dispatch formal recall notices to all consignees"
+            disabled={loading || !isNotificationApproved || isOutboxDispatched || isClosed || (!isCustomerOps && evaluationMode)}
+            title={
+              !isCustomerOps && evaluationMode
+                ? 'Requires Customer Operations persona (select in top bar)'
+                : !isNotificationApproved
+                ? 'Requires Customer Operations notification approval before dispatch'
+                : 'Customer Operations sign-off: dispatch formal recall notices to all consignees'
+            }
           >
             <Send size={13} />
             {isOutboxDispatched ? 'Outbox Dispatched' : 'Dispatch Recall Outbox (Ops)'}
@@ -270,15 +416,19 @@ export function ApprovalGate({
           <button
             className="btn btn-secondary"
             onClick={() => setIsPhoneModalOpen(true)}
-            disabled={loading || !isOutboxDispatched || isAckResolved || isClosed}
-            title={`Record signed phone attestation verifying ${targetAckLabel} receipt`}
+            disabled={loading || !isOutboxDispatched || isAckResolved || isClosed || (!isCustomerOps && evaluationMode)}
+            title={
+              !isCustomerOps && evaluationMode
+                ? 'Requires Customer Operations persona (select in top bar)'
+                : `Record signed phone attestation verifying ${targetAckLabel} receipt`
+            }
           >
             <PhoneCall size={13} />
             {isAckResolved ? (targetAckId ? `${targetAckId} Resolved` : 'Attestation Resolved') : 'Verify Phone Attestation'}
           </button>
         </div>
 
-        {/* Gate 4: Dual-Signature Release Rail & Status (Group 4b) */}
+        {/* Gate 4: Dual-Signature Release Rail */}
         <div
           style={{
             background: 'var(--bg-surface-subtle)',
@@ -303,8 +453,21 @@ export function ApprovalGate({
             <button
               className="btn btn-secondary"
               onClick={() => setIsReleaseModalOpen(true)}
-              disabled={loading || !isQaApproved || isStep2Done || isClosed}
-              title="Execute sequential release step"
+              disabled={
+                loading ||
+                !isQaApproved ||
+                isStep2Done ||
+                isClosed ||
+                (!isStep1Done && !isQaLead && evaluationMode) ||
+                (isStep1Done && !isClosureAuth && evaluationMode)
+              }
+              title={
+                !isStep1Done && !isQaLead && evaluationMode
+                  ? 'Step 1 requires QA Lead persona'
+                  : isStep1Done && !isClosureAuth && evaluationMode
+                  ? 'Step 2 requires Closure Authority persona'
+                  : 'Execute sequential release step'
+              }
             >
               <FileCheck size={13} />
               {isStep2Done
@@ -316,7 +479,7 @@ export function ApprovalGate({
           </div>
 
           {/* Dual-Signature Rail Step Status Indicators */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '4px' }}>
+          <div className="dual-signature-grid">
             <div
               style={{
                 background: 'var(--bg-surface)',
@@ -365,7 +528,7 @@ export function ApprovalGate({
           </div>
         </div>
 
-        {/* Gate 5: Non-Response Closure (21 CFR § 7.49) */}
+        {/* Gate 5: Synthetic Non-Response Closure (Modeled Workflow) */}
         <div
           style={{
             background: 'var(--bg-surface-subtle)',
@@ -381,25 +544,29 @@ export function ApprovalGate({
         >
           <div>
             <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-primary)' }}>
-              5. Non-Response Closure (§ 7.49)
+              5. Synthetic Non-Response Closure
             </div>
             <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-              Role: <span style={{ color: 'var(--text-secondary)' }}>Closure Authority</span> — Documents certified non-response and refers to FDA District Office.
+              Role: <span style={{ color: 'var(--text-secondary)' }}>Closure Authority</span> — Records synthetic non-response documentation and modeled referral note (not a legal or regulatory certification).
             </div>
           </div>
 
           <button
             className="btn btn-secondary"
             onClick={() => setIsNonResponseModalOpen(true)}
-            disabled={loading || !isOutboxDispatched || isClosed}
-            title="Document certified non-response under 21 CFR § 7.49 and refer to FDA District Office"
+            disabled={loading || !isOutboxDispatched || isClosed || (!isClosureAuth && evaluationMode)}
+            title={
+              !isClosureAuth && evaluationMode
+                ? 'Requires Closure Authority persona (select in top bar)'
+                : 'Record synthetic non-response documentation and modeled referral note'
+            }
           >
             <ShieldCheck size={13} />
             Non-Response Close (§ 7.49)
           </button>
         </div>
 
-        {/* Gate 6: Request Closure */}
+        {/* Gate 6a: Request Closure (Recall Coordinator) */}
         <div
           style={{
             background: 'var(--bg-surface-subtle)',
@@ -415,56 +582,80 @@ export function ApprovalGate({
         >
           <div>
             <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-primary)' }}>
-              6. Request Incident Closure
+              6a. Request Incident Closure
             </div>
             <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-              Role: <span style={{ color: 'var(--text-secondary)' }}>Closure Authority</span> — Submits for case closure disposition.
+              Role: <span style={{ color: 'var(--text-secondary)' }}>Recall Coordinator</span> — Requests formal closure disposition review.
             </div>
           </div>
 
           <button
-            className={`btn ${isClosed ? 'btn-secondary' : 'btn-ghost'}`}
+            className={`btn ${isClosureRequested ? 'btn-secondary' : 'btn-ghost'}`}
             onClick={onRequestClosure}
-            disabled={loading || isClosed}
+            disabled={loading || !isOutboxDispatched || isClosureRequested || isClosed || (!isRecallCoordinator && evaluationMode)}
             title={
-              closureGate?.is_blocked
-                ? 'Closure blocked: Unverified consignee acknowledgements remain.'
-                : 'Submit for case closure disposition'
+              !isRecallCoordinator && evaluationMode
+                ? 'Requires Recall Coordinator persona (select in top bar)'
+                : 'Recall Coordinator: submit formal closure review request'
             }
           >
             <CheckCircle2 size={13} />
-            {isClosed ? 'Case Closed & Archived' : 'Request Case Closure'}
+            {isClosureRequested ? 'Closure Review Requested' : 'Request Case Closure (Coord)'}
+          </button>
+        </div>
+
+        {/* Gate 6b: Authorize Incident Closure (Closure Authority) */}
+        <div
+          style={{
+            background: 'var(--bg-surface-subtle)',
+            border: '1px solid var(--border-subtle)',
+            borderRadius: 'var(--radius-md)',
+            padding: '12px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '8px',
+          }}
+        >
+          <div>
+            <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-primary)' }}>
+              6b. Authorize Incident Closure
+            </div>
+            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+              Role: <span style={{ color: 'var(--text-secondary)' }}>Closure Authority</span> — Signs final case closure disposition.
+            </div>
+          </div>
+
+          <button
+            className={`btn ${isClosed ? 'btn-secondary' : isClosureRequested && !closureGate?.is_blocked ? 'btn-primary' : 'btn-ghost'}`}
+            onClick={() => onAuthorizeClosure && onAuthorizeClosure(activeClosureReq?.request_id)}
+            disabled={loading || !isClosureRequested || closureGate?.is_blocked || isClosed || (!isClosureAuth && evaluationMode)}
+            title={
+              closureGate?.is_blocked
+                ? `Closure blocked: Unverified consignee acknowledgements remain (${outstandingAcks.join(', ')}).`
+                : !isClosureRequested
+                ? 'Awaiting Recall Coordinator closure request'
+                : !isClosureAuth && evaluationMode
+                ? 'Requires Closure Authority persona (select in top bar)'
+                : 'Closure Authority: sign final case closure disposition'
+            }
+          >
+            <CheckCircle2 size={13} />
+            {isClosed ? 'Case Closed & Archived' : 'Authorize Final Closure (Closure Auth)'}
           </button>
         </div>
       </div>
 
+
       {/* MODAL 1: Phone Attestation Modal */}
       {isPhoneModalOpen && (
         <div
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            width: '100vw',
-            height: '100vh',
-            background: 'rgba(0, 0, 0, 0.75)',
-            zIndex: 100,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '20px',
-          }}
+          className="modal-overlay"
           onClick={() => setIsPhoneModalOpen(false)}
         >
           <div
-            className="card-panel"
-            style={{
-              maxWidth: '520px',
-              width: '100%',
-              background: 'var(--bg-surface)',
-              border: '1px solid var(--border-medium)',
-              padding: '20px',
-            }}
+            className="modal-panel modal-panel-sm"
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
@@ -539,30 +730,11 @@ export function ApprovalGate({
       {/* MODAL 2: Dual-Signature Release Rail Modal (Group 1b & 5c) */}
       {isReleaseModalOpen && (
         <div
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            width: '100vw',
-            height: '100vh',
-            background: 'rgba(0, 0, 0, 0.75)',
-            zIndex: 100,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '20px',
-          }}
+          className="modal-overlay"
           onClick={() => setIsReleaseModalOpen(false)}
         >
           <div
-            className="card-panel"
-            style={{
-              maxWidth: '560px',
-              width: '100%',
-              background: 'var(--bg-surface)',
-              border: '1px solid var(--border-medium)',
-              padding: '20px',
-            }}
+            className="modal-panel modal-panel-md"
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
@@ -651,39 +823,20 @@ export function ApprovalGate({
         </div>
       )}
 
-      {/* MODAL 3: Non-Response 21 CFR § 7.49 Modal */}
+      {/* MODAL 3: Synthetic Non-Response Documentation Modal */}
       {isNonResponseModalOpen && (
         <div
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            width: '100vw',
-            height: '100vh',
-            background: 'rgba(0, 0, 0, 0.75)',
-            zIndex: 100,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '20px',
-          }}
+          className="modal-overlay"
           onClick={() => setIsNonResponseModalOpen(false)}
         >
           <div
-            className="card-panel"
-            style={{
-              maxWidth: '520px',
-              width: '100%',
-              background: 'var(--bg-surface)',
-              border: '1px solid var(--border-medium)',
-              padding: '20px',
-            }}
+            className="modal-panel modal-panel-sm"
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <ShieldCheck size={16} style={{ color: 'var(--accent-primary)' }} />
-                <h3 style={{ fontSize: '14px', fontWeight: 600 }}>21 CFR § 7.49 Non-Response Closure</h3>
+                <h3 style={{ fontSize: '14px', fontWeight: 600 }}>Synthetic Non-Response Documentation</h3>
               </div>
               <button className="btn btn-ghost" style={{ padding: '4px' }} onClick={() => setIsNonResponseModalOpen(false)}>
                 <X size={16} />
@@ -692,7 +845,7 @@ export function ApprovalGate({
 
             <form onSubmit={handleNonResponseSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '12px' }}>
               <div>
-                <label className="section-label" style={{ display: 'block', marginBottom: '2px' }}>FDA Regulatory Filing ID</label>
+                <label className="section-label" style={{ display: 'block', marginBottom: '2px' }}>Modeled Regulatory Filing ID</label>
                 <input
                   ref={nonResponseFirstInputRef}
                   type="text"
@@ -716,7 +869,7 @@ export function ApprovalGate({
               </div>
 
               <div>
-                <label className="section-label" style={{ display: 'block', marginBottom: '2px' }}>Good-Faith Legal Certification Notes</label>
+                <label className="section-label" style={{ display: 'block', marginBottom: '2px' }}>Synthetic Documentation Notes</label>
                 <textarea
                   value={goodFaithNotes}
                   onChange={(e) => setGoodFaithNotes(e.target.value)}
@@ -731,7 +884,7 @@ export function ApprovalGate({
                   Cancel
                 </button>
                 <button type="submit" className="btn btn-primary">
-                  Certify & Close Under § 7.49
+                  Record Documentation & Close
                 </button>
               </div>
             </form>

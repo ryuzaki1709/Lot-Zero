@@ -1,0 +1,486 @@
+/* ============================================================================
+   Lot Zero — responsive hardening layer
+   Loaded AFTER antigravity.css. antigravity.css owns the cockpit breakpoints
+   (.cockpit-grid / .cockpit-column / .case-dashboard-container). This file
+   fills the gaps that sheet doesn't cover:
+
+     · shell + stepper containers that are referenced but undefined
+     · nested auto-fit grids that still overflow below ~400px
+     · modal viewport units (100vw / 100vh)
+     · touch targets, iOS focus-zoom, sticky hover
+     · landscape, safe-area, print
+
+   Breakpoints intentionally match antigravity.css: 1180px / 768px, plus a
+   400px compact-phone step and a 480px landscape step.
+   ========================================================================== */
+
+:root {
+  --shell-max: 1600px;
+  --safe-l: env(safe-area-inset-left, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-t: env(safe-area-inset-top, 0px);
+}
+
+/* ---------- 1. Global overflow guards -------------------------------------
+   The original bug: a fixed 3-column grid with a ~1000px minimum forced the
+   document wider than the viewport, so the whole page scrolled sideways and
+   text clipped mid-word. These guards make that impossible to reintroduce. */
+
+html {
+  -webkit-text-size-adjust: 100%; /* stop iOS inflating text in landscape */
+  text-size-adjust: 100%;
+}
+
+html,
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+body {
+  min-width: 0;
+  min-height: 100vh;
+  min-height: 100dvh; /* dvh tracks the collapsing mobile URL bar */
+}
+
+/* Grid/flex children default to min-width:auto and refuse to shrink below
+   their content — this is what clipped the mono hashes and lot IDs. */
+main,
+section,
+article,
+.card-panel,
+.section,
+.section-head,
+.stat,
+.step,
+.def-row {
+  min-width: 0;
+}
+
+/* Long unbroken tokens: SHA-256 digests, lot IDs, batch codes. */
+.mono-val,
+.def-row dd,
+.stat-value {
+  overflow-wrap: anywhere;
+}
+
+img,
+svg,
+video,
+canvas {
+  max-width: 100%;
+}
+
+/* ---------- 2. Shell + stepper containers ---------------------------------
+   Both class names are used in markup/CSS but were never defined, so the
+   stepper rendered flush against the screen edge with its first label clipped
+   and the app shell lost its max-width. */
+
+.app-shell {
+  min-height: 100vh;
+  min-height: 100dvh;
+  width: 100%;
+  max-width: var(--shell-max);
+  margin-inline: auto;
+  padding-bottom: calc(32px + var(--safe-b));
+  position: relative;
+}
+
+/* Container padding with safe-area support */
+.page,
+.topbar-inner,
+.cockpit-grid,
+.case-dashboard-container,
+.stepper-container {
+  padding-left: calc(24px + var(--safe-l));
+  padding-right: calc(24px + var(--safe-r));
+}
+
+@media (max-width: 1180px) and (min-width: 769px) {
+  .page,
+  .topbar-inner,
+  .cockpit-grid,
+  .case-dashboard-container,
+  .stepper-container {
+    padding-left: calc(20px + var(--safe-l));
+    padding-right: calc(20px + var(--safe-r));
+  }
+}
+
+@media (max-width: 768px) {
+  .page,
+  .topbar-inner,
+  .cockpit-grid,
+  .case-dashboard-container,
+  .stepper-container {
+    padding-left: calc(16px + var(--safe-l));
+    padding-right: calc(16px + var(--safe-r));
+  }
+}
+
+/* ---------- 3. Nested auto-fit grids --------------------------------------
+   `repeat(auto-fit, minmax(340px, 1fr))` cannot go below 340px. Inside a card
+   (32px padding) inside a 16px-gutter page, that needs ~404px of viewport —
+   so it overflowed every phone. `min(<n>px, 100%)` clamps the track to the
+   space actually available. */
+
+.grid-auto,
+.grid-auto-sm,
+.grid-auto-xs {
+  display: grid;
+  align-items: start;
+}
+
+.grid-auto {
+  grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr));
+  gap: 16px;
+}
+
+.grid-auto-sm {
+  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
+  gap: 12px;
+}
+
+.grid-auto-xs {
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+  gap: 16px;
+}
+
+/* ---------- 4. Top bar ----------------------------------------------------- */
+
+.topbar {
+  padding-top: var(--safe-t);
+}
+
+.topbar-brand {
+  min-width: 0;
+  flex-shrink: 1;
+}
+
+@media (max-width: 768px) {
+  .topbar-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .topbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    max-width: 100%;
+    padding-bottom: 2px;
+  }
+  .topbar-actions::-webkit-scrollbar {
+    display: none;
+  }
+  .topbar-actions select,
+  .topbar-actions .btn {
+    flex-shrink: 0;
+  }
+}
+
+/* ---------- 5. Stepper ------------------------------------------------------
+   Six stages never fit a phone. Make it an honest horizontal rail: snap
+   points, no scrollbar chrome, and an edge fade so it reads as scrollable. */
+
+.stepper-container {
+  width: 100%;
+  max-width: var(--shell-max);
+  margin-inline: auto;
+  min-width: 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.stepper {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.stepper::-webkit-scrollbar {
+  display: none;
+}
+
+.step {
+  scroll-snap-align: start;
+}
+
+@media (max-width: 1180px) {
+  .stepper {
+    -webkit-mask-image: linear-gradient(to right, #000 0, #000 92%, transparent 100%);
+    mask-image: linear-gradient(to right, #000 0, #000 92%, transparent 100%);
+  }
+}
+
+@media (max-width: 768px) {
+  .stepper {
+    margin-top: 24px;
+    gap: 4px;
+  }
+  .step {
+    flex: 0 0 auto;
+    min-width: 118px;
+  }
+  .step-name,
+  .step-desc {
+    padding-right: 12px;
+  }
+  .step-name {
+    font-size: 12.5px;
+  }
+  .step-desc {
+    font-size: 11.5px;
+  }
+}
+
+/* ---------- 6. Tabs --------------------------------------------------------
+   The filter tabs ran off-screen with no way to reach the last one. */
+
+.tabs {
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x proximity;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.tab {
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+  white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+  .tabs {
+    gap: 18px;
+  }
+}
+
+/* ---------- 7. Touch targets, focus zoom, sticky hover --------------------
+   Icon-only ghost buttons were ~24px tall — under the 44px WCAG 2.5.5 / iOS
+   HIG minimum. Inputs under 16px trigger Safari's zoom-on-focus, which is what
+   throws the layout sideways after tapping the role selector. */
+
+@media (pointer: coarse) {
+  .btn,
+  .tab {
+    min-height: 44px;
+  }
+
+  input,
+  select,
+  textarea {
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  .citation-highlight {
+    padding-block: 2px;
+  }
+}
+
+/* Hover styles latch on after a tap on touch devices. */
+@media (hover: none) {
+  .card-panel-interactive:hover {
+    background-color: var(--bg-surface);
+    border-color: var(--border-subtle);
+  }
+  .btn-secondary:hover:not(:disabled),
+  .btn-ghost:hover:not(:disabled) {
+    background-color: transparent;
+  }
+}
+
+/* ---------- 8. Modals -------------------------------------------------------
+   `width: 100vw` includes the desktop scrollbar gutter, producing a permanent
+   horizontal scrollbar; `height: 100vh` is cut off by mobile browser chrome.
+   Replaced with inset:0 + dvh, and a bottom-sheet treatment on phones. */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  height: 100dvh;
+  background: rgba(0, 0, 0, 0.75);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  padding-top: max(20px, var(--safe-t));
+  padding-bottom: max(20px, var(--safe-b));
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+.modal-panel {
+  width: 100%;
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-medium);
+  padding: 20px;
+}
+
+.modal-panel-sm { max-width: 520px; }
+.modal-panel-md { max-width: 560px; }
+.modal-panel-lg { max-width: 700px; }
+
+@media (max-width: 768px) {
+  .modal-overlay {
+    align-items: flex-end; /* thumb-reachable bottom sheet */
+    padding: 0;
+  }
+  .modal-panel,
+  .modal-panel-sm,
+  .modal-panel-md,
+  .modal-panel-lg {
+    max-width: none;
+    max-height: 92dvh;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    border-bottom: none;
+    padding-bottom: calc(20px + var(--safe-b));
+  }
+}
+
+/* ---------- 9. Definition rows -------------------------------------------- */
+
+@media (max-width: 400px) {
+  .def-row {
+    gap: 12px;
+  }
+  .def-row dt {
+    flex: 1 1 auto;
+  }
+  .def-row dd {
+    flex: 0 1 auto;
+  }
+}
+
+/* ---------- 10. Compact phone (<=400px: iPhone SE, 360px Android) --------- */
+
+@media (max-width: 400px) {
+  .page,
+  .cockpit-grid,
+  .case-dashboard-container,
+  .stepper-container,
+  .topbar-inner {
+    padding-left: calc(12px + var(--safe-l));
+    padding-right: calc(12px + var(--safe-r));
+  }
+
+  .page-title {
+    font-size: clamp(19px, 5.4vw, 22px);
+  }
+
+  .card-panel {
+    padding: 14px;
+  }
+
+  .doc-block {
+    font-size: 11px;
+    padding: 12px 14px;
+  }
+
+  .stat-value {
+    font-size: 20px;
+  }
+
+  .btn {
+    padding-inline: 10px;
+    font-size: 12.5px;
+  }
+
+  .section-title {
+    font-size: 16px;
+  }
+}
+
+/* ---------- 11. Landscape phones ------------------------------------------
+   A sticky top bar plus a sticky-ish header eats most of a 375px-tall
+   viewport. Release the top bar and tighten vertical rhythm. */
+
+@media (max-height: 480px) and (orientation: landscape) {
+  .topbar {
+    position: static;
+  }
+  .page-header {
+    padding-top: 16px;
+  }
+  .section {
+    margin-top: 20px;
+  }
+  .modal-overlay {
+    align-items: flex-start;
+  }
+  .modal-panel {
+    max-height: 100dvh;
+    border-radius: var(--radius-lg);
+  }
+}
+
+/* ---------- 12. Motion / GPU cost ------------------------------------------
+   The two large radial gradients plus the kinetic canvas are expensive to
+   composite on mobile GPUs and are barely visible at that size. */
+
+@media (max-width: 768px) {
+  body::before {
+    background: radial-gradient(600px 320px at 50% -10%, rgba(0, 220, 130, 0.06), transparent 65%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ---------- 13. Print ------------------------------------------------------- */
+
+@media print {
+  .topbar,
+  .stepper,
+  .stepper-container,
+  .tabs,
+  .btn {
+    display: none !important;
+  }
+  .cockpit-grid {
+    display: block;
+  }
+  body::before {
+    display: none;
+  }
+  html,
+  body {
+    background: #fff;
+    color: #000;
+  }
+  .card-panel {
+    border-color: #ccc;
+    break-inside: avoid;
+  }
+}

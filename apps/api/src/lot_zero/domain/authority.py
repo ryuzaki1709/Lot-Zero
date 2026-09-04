@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import re
-from typing import Literal
 
 from .commands import (
+    AdvancePhaseCommand,
     ApprovalCommand,
     ApproveClosureCommand,
     ApproveContainmentCommand,
@@ -18,6 +18,7 @@ from .commands import (
     RecordAcknowledgementCommand,
     RequestClosureCommand,
     RequestContainmentCommand,
+    RequestNotificationCommand,
     SendNotificationCommand,
 )
 from .identifiers import ActionIntent
@@ -28,6 +29,7 @@ class Principal(DomainRecord):
     tenant_id: Identifier
     principal_id: Identifier
     roles: tuple[Role, ...]
+    can_reset_evaluation: bool = False
 
 
 class AuthorizationDecision(DomainRecord):
@@ -42,7 +44,9 @@ def _deny(code: str, explanation: str) -> AuthorizationDecision:
     return AuthorizationDecision(allowed=False, code=code, explanation=explanation)
 
 
-def _allow(explanation: str, *, code: str = "ALLOWED", effects: tuple[ActionIntent, ...] = ()) -> AuthorizationDecision:
+def _allow(
+    explanation: str, *, code: str = "ALLOWED", effects: tuple[ActionIntent, ...] = ()
+) -> AuthorizationDecision:
     return AuthorizationDecision(
         allowed=True,
         code=code,
@@ -97,27 +101,6 @@ def _check_human_approval(
     return None
 
 
-def _notification_approval(
-    command: SendNotificationCommand, state: IncidentState
-) -> AuthorizationDecision | None:
-    related = tuple(
-        approval
-        for approval in state.approvals
-        if approval.approval_type == "notification"
-        and approval.decision == "approved"
-        and approval.case_version <= state.case.case_version
-        and approval.scope_version == command.scope_version
-        and approval.payload_version == command.payload_version
-    )
-    if not related:
-        return _deny("MISSING_NOTIFICATION_APPROVAL", "notification needs its own approved payload")
-    if not any(approval.policy_version == command.policy_version for approval in related):
-        return _deny(
-            "STALE_POLICY_VERSION", "notification approval is bound to another policy version"
-        )
-    return None
-
-
 def _authorize_notification(
     command: SendNotificationCommand, principal: Principal, state: IncidentState
 ) -> AuthorizationDecision:
@@ -129,16 +112,36 @@ def _authorize_notification(
         None,
     )
     if packet is None:
-        return _deny(
-            "MISSING_NOTIFICATION_PACKET", "notification packet is not present in the incident"
-        )
+        return _deny("MISSING_PACKET", "command packet is not present in incident")
+    if packet.scope_id != command.scope_id:
+        return _deny("SCOPE_MISMATCH", "packet is bound to another scope")
     if packet.scope_version != command.scope_version:
         return _deny("STALE_SCOPE_VERSION", "packet is bound to another scope version")
     if packet.payload_version != command.payload_version:
         return _deny("STALE_PAYLOAD_VERSION", "command is bound to an old payload version")
-    approval_denial = _notification_approval(command, state)
-    if approval_denial is not None:
-        return approval_denial
+    if packet.payload_hash != command.payload_hash:
+        return _deny("PAYLOAD_HASH_MISMATCH", "packet payload hash does not match command")
+
+    approval = next(
+        (
+            a
+            for a in state.approvals
+            if a.approval_type == "notification"
+            and a.decision == "approved"
+            and a.packet_id == command.packet_id
+            and a.scope_id == command.scope_id
+            and a.scope_version == command.scope_version
+            and a.payload_version == command.payload_version
+            and a.payload_hash == command.payload_hash
+            and a.policy_version == command.policy_version
+        ),
+        None,
+    )
+    if approval is None:
+        return _deny(
+            "MISSING_NOTIFICATION_APPROVAL", "notification requires prior matching approved payload"
+        )
+
     if not _has_role(principal, "customer_operations"):
         return _deny("ROLE_NOT_AUTHORIZED", "customer operations owns notification approval")
     return _allow("notification is bound to a current customer operations approval")
@@ -147,33 +150,78 @@ def _authorize_notification(
 def _authorize_closure(
     command: ApproveClosureCommand, principal: Principal, state: IncidentState
 ) -> AuthorizationDecision:
-    human_denial = _check_human_approval(command, principal, "closure_authority")
-    if human_denial is not None:
-        return human_denial
+    if not _has_role(principal, "closure_authority"):
+        return _deny("ROLE_NOT_AUTHORIZED", "principal lacks the required human approval role")
+    if not command.rationale.strip():
+        return _deny("MISSING_RATIONALE", "human approval requires a nonblank rationale")
+
+    # Locate the matching persisted closure request
+    request = next((r for r in state.closure_requests if r.request_id == command.request_id), None)
+    if request is None:
+        return _deny(
+            "MISSING_CLOSURE_REQUEST", "closure requires a prior persisted closure request"
+        )
+    if request.is_consumed:
+        return _deny(
+            "CLOSURE_REQUEST_ALREADY_CONSUMED", "closure request has already been consumed"
+        )
+    if request.request_stream_version != command.expected_request_stream_version:
+        return _deny("STALE_REQUEST_STREAM_VERSION", "closure request stream version mismatch")
+    if state.scopes and state.scopes[0].scope_version != command.expected_scope_version:
+        return _deny("STALE_SCOPE_VERSION", "scope version has changed since closure request")
+    if request.requested_policy_version != command.expected_policy_version:
+        return _deny("STALE_POLICY_VERSION", "policy version has changed since closure request")
+
+    # Enforce separation of duties: requester and approver must be different people
+    if request.requester_principal_id == principal.principal_id:
+        return _deny(
+            "REQUESTER_APPROVER_CONFLICT", "requester and approver must be different people"
+        )
+
     if command.closure_id != "EVAL-CLOSE-01" or command.policy_version != "EVAL-CLOSE-01":
         return _deny("CLOSURE_POLICY_NOT_ALLOWED", "closure requires EVAL-CLOSE-01")
-    
+
     # Active refusals cannot be waived under non-response
     rejected = [ack for ack in state.acknowledgements if ack.status == "rejected"]
     if rejected:
         return _deny(
             "REJECTED_ACKNOWLEDGEMENT_REQUIRES_SEIZURE_REFERRAL",
-            "Consignee actively refused recall notice. Cannot close under non-response; requires regulatory seizure/injunction referral."
+            "Consignee actively refused recall notice. Cannot close under non-response; requires regulatory seizure/injunction referral.",
         )
 
     # Outstanding acks check
     outstanding = [ack for ack in state.acknowledgements if ack.status == "outstanding"]
     if outstanding:
-        # Check if certified good-faith non-response under 21 CFR § 7.49 is attached
-        if not (command.non_response_filing_id and command.attempt_count and command.attempt_count >= 3):
-            return _deny("OUTSTANDING_ACKNOWLEDGEMENT", "all consignee acknowledgements must be verified before closure")
+        # Check if synthetic non-response documentation (modeled workflow) is attached
+        if not (
+            command.non_response_filing_id and command.attempt_count and command.attempt_count >= 3
+        ):
+            return _deny(
+                "OUTSTANDING_ACKNOWLEDGEMENT",
+                "all consignee acknowledgements must be verified before closure",
+            )
 
     # Strict fallthrough: recovery and effectiveness evidence are unconditionally required
     if state.recovery is not None:
         return _deny("UNRESOLVED_BLOCKER", "closure requires all blockers to be resolved")
+
+    known_evidence: set[str] = set()
+    for s in state.scopes:
+        known_evidence.update(s.evidence_record_ids)
+    if state.case.source_record_ids:
+        known_evidence.update(state.case.source_record_ids)
+
     if not command.effectiveness_evidence_ids:
         return _deny("MISSING_EFFECTIVENESS_EVIDENCE", "closure requires effectiveness evidence")
-    return _allow("closure evidence and acknowledgement state are complete")
+
+    for ev_id in command.effectiveness_evidence_ids:
+        if ev_id not in known_evidence:
+            return _deny(
+                "UNKNOWN_EVIDENCE_ID",
+                f"closure evidence ID '{ev_id}' does not exist in this incident case",
+            )
+
+    return _allow("closure evidence, request, and acknowledgement state are complete")
 
 
 def _authorize_release(
@@ -182,27 +230,38 @@ def _authorize_release(
     scope_denial = _check_scope(command, state)
     if scope_denial is not None:
         return scope_denial
-    
+
     # Strictly validate 64-char SHA-256 hex string format
     if not re.fullmatch(r"^[a-fA-F0-9]{64}$", command.retest_doc_hash):
-        return _deny("INVALID_RETEST_HASH", "retest_doc_hash must be a valid 64-character SHA-256 hex digest")
+        return _deny(
+            "INVALID_RETEST_HASH", "retest_doc_hash must be a valid 64-character SHA-256 hex digest"
+        )
     if not command.retest_doc_id.strip():
-        return _deny("MISSING_RETEST_DOC_ID", "release authorization requires a cited re-test document ID")
+        return _deny(
+            "MISSING_RETEST_DOC_ID", "release authorization requires a cited re-test document ID"
+        )
 
     # Must have an active hold on this scope to release
     matching_holds = [
-        a for a in state.containment_actions
+        a
+        for a in state.containment_actions
         if a.scope_id == command.scope_id and a.action_type == "provisional_hold"
     ]
     if not matching_holds:
-        return _deny("NO_HOLD_TO_RELEASE", "cannot authorize release on a scope with no active containment holds")
+        return _deny(
+            "NO_HOLD_TO_RELEASE",
+            "cannot authorize release on a scope with no active containment holds",
+        )
 
     has_qa = _has_role(principal, "qa")
     has_closure = _has_role(principal, "closure_authority")
 
     # Reject dual-role ambiguity: principal cannot assert both roles simultaneously
     if has_qa and has_closure:
-        return _deny("DUAL_ROLE_AMBIGUITY", "Principal holds both QA and Closure Authority roles; separation of duties requires distinct acting identities.")
+        return _deny(
+            "DUAL_ROLE_AMBIGUITY",
+            "Principal holds both QA and Closure Authority roles; separation of duties requires distinct acting identities.",
+        )
 
     # Step 1: QA Lead biological clearance
     if has_qa:
@@ -228,14 +287,16 @@ def _authorize_release(
                 "STEP_1_ALREADY_RECORDED",
                 "QA biological clearance already recorded; step 2 requires Closure Authority signature.",
             )
-        return _allow("QA lead may authorize biological re-test clearance", code="ALLOWED_RELEASE_QA_STEP")
+        return _allow(
+            "QA lead may authorize biological re-test clearance", code="ALLOWED_RELEASE_QA_STEP"
+        )
 
     # Step 2: Closure / Operational Authority release (requires prior QA approval)
     if has_closure:
         human_denial = _check_human_approval(command, principal, "closure_authority")
         if human_denial is not None:
             return human_denial
-        
+
         # Verify prior QA release approval exists for the exact same scope, scope_version, and re-test hash
         prior_qa_approval = next(
             (
@@ -255,7 +316,7 @@ def _authorize_release(
                 "MISSING_QA_RELEASE_APPROVAL",
                 "operational inventory release requires prior biological clearance from QA Lead with matching re-test hash",
             )
-        
+
         # Check if already consumed by an earlier final release
         already_consumed = any(
             app
@@ -280,9 +341,14 @@ def _authorize_release(
                 "Separation of duties violation: Closure Authority release cannot be signed by the same principal who provided QA clearance.",
             )
 
-        return _allow("closure authority may finalize dual-signature inventory release", code="ALLOWED_RELEASE_FINAL_STEP")
+        return _allow(
+            "closure authority may finalize dual-signature inventory release",
+            code="ALLOWED_RELEASE_FINAL_STEP",
+        )
 
-    return _deny("ROLE_NOT_AUTHORIZED", "release authorization requires QA Lead or Closure Authority")
+    return _deny(
+        "ROLE_NOT_AUTHORIZED", "release authorization requires QA Lead or Closure Authority"
+    )
 
 
 def _standing_policy_approval(
@@ -335,6 +401,15 @@ def authorize(
         if human_denial is not None:
             return human_denial
         return _check_scope(command, state) or _allow("QA may approve containment")
+    if isinstance(command, RequestNotificationCommand):
+        scope_denial = _check_scope(command, state)
+        if scope_denial is not None:
+            return scope_denial
+        if not _has_role(principal, "recall_coordinator"):
+            return _deny(
+                "ROLE_NOT_AUTHORIZED", "only a recall coordinator may request notification"
+            )
+        return _allow("notification request is within coordinator authority")
     if isinstance(command, ApproveNotificationCommand):
         human_denial = _check_human_approval(command, principal, "customer_operations")
         if human_denial is not None:
@@ -369,15 +444,27 @@ def authorize(
     if isinstance(command, RecordAcknowledgementCommand):
         if not _has_role(principal, "customer_operations"):
             return _deny("ROLE_NOT_AUTHORIZED", "customer operations records acknowledgements")
-        if command.attestation_hash and not re.fullmatch(r"^[a-fA-F0-9]{64}$", command.attestation_hash):
-            return _deny("INVALID_ATTESTATION_HASH", "attestation_hash must be a 64-character SHA-256 digest")
-        
+        if command.attestation_hash and not re.fullmatch(
+            r"^[a-fA-F0-9]{64}$", command.attestation_hash
+        ):
+            return _deny(
+                "INVALID_ATTESTATION_HASH", "attestation_hash must be a 64-character SHA-256 digest"
+            )
+
         # Prevent downgrading already verified acknowledgements
         existing_ack = next(
-            (a for a in state.acknowledgements if a.acknowledgement_id == command.acknowledgement_id),
+            (
+                a
+                for a in state.acknowledgements
+                if a.acknowledgement_id == command.acknowledgement_id
+            ),
             None,
         )
-        if existing_ack and existing_ack.status == "verified" and command.acknowledgement_status != "verified":
+        if (
+            existing_ack
+            and existing_ack.status == "verified"
+            and command.acknowledgement_status != "verified"
+        ):
             return _deny(
                 "CANNOT_DOWNGRADE_VERIFIED_ACKNOWLEDGEMENT",
                 "Verified consignee acknowledgements cannot be erased or downgraded.",
@@ -387,5 +474,53 @@ def authorize(
     if isinstance(command, RequestClosureCommand):
         if not _has_role(principal, "recall_coordinator"):
             return _deny("ROLE_NOT_AUTHORIZED", "only a coordinator may request closure review")
+        known_evidence: set[str] = set()
+        for s in state.scopes:
+            known_evidence.update(s.evidence_record_ids)
+        if state.case.source_record_ids:
+            known_evidence.update(state.case.source_record_ids)
+        if not command.evidence_record_ids:
+            return _deny("MISSING_EVIDENCE", "closure request requires evidence records")
+        for ev_id in command.evidence_record_ids:
+            if ev_id not in known_evidence:
+                return _deny(
+                    "UNKNOWN_EVIDENCE_ID",
+                    f"closure request evidence ID '{ev_id}' does not exist in this incident case",
+                )
         return _allow("closure review request is within coordinator authority")
+
+    if isinstance(command, AdvancePhaseCommand):
+        target = command.target_phase
+        if target == "scope_review":
+            if not _has_role(principal, "recall_coordinator"):
+                return _deny(
+                    "ROLE_NOT_AUTHORIZED",
+                    "Advancing to scope_review requires recall_coordinator role",
+                )
+        elif target in ("provisional_containment", "action_review"):
+            if not _has_role(principal, "qa") and not _has_role(principal, "recall_coordinator"):
+                return _deny(
+                    "ROLE_NOT_AUTHORIZED",
+                    f"Advancing to {target} requires qa or recall_coordinator role",
+                )
+        elif target == "ack_monitoring":
+            if not _has_role(principal, "customer_operations"):
+                return _deny(
+                    "ROLE_NOT_AUTHORIZED",
+                    "Advancing to ack_monitoring requires customer_operations role",
+                )
+        elif target == "effectiveness_check":
+            if not _has_role(principal, "customer_operations") and not _has_role(
+                principal, "closure_authority"
+            ):
+                return _deny(
+                    "ROLE_NOT_AUTHORIZED",
+                    "Advancing to effectiveness_check requires customer_operations or closure_authority role",
+                )
+        elif target == "closed":
+            if not _has_role(principal, "closure_authority"):
+                return _deny(
+                    "ROLE_NOT_AUTHORIZED", "Advancing to closed requires closure_authority role"
+                )
+        return _allow(f"Authorized phase transition to {target}")
     return _deny("COMMAND_NOT_SUPPORTED", "command is outside the closed authority boundary")

@@ -1,13 +1,12 @@
-"""Append-only SQLite event repository with optimistic concurrency control."""
+"""Append-oriented application event storage with an archived reset history and a self-verifying export bundle."""
 
 from __future__ import annotations
 
 import asyncio
 import json
 import sqlite3
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
-from typing import Callable
 
 from ..domain.events import Event
 from ..domain.models import IncidentState, RecallCase
@@ -16,7 +15,7 @@ from ..ports.repositories import ConcurrencyError, IncidentRepository
 
 
 class SqliteIncidentRepository(IncidentRepository):
-    """Persists incident event streams in an append-only SQLite table with optimistic locking."""
+    """Persists incident event streams in an append-oriented SQLite table with optimistic locking, archived reset history, and self-verifying export bundle."""
 
     def __init__(
         self,
@@ -31,7 +30,7 @@ class SqliteIncidentRepository(IncidentRepository):
         self._init_schema()
 
     def _init_schema(self) -> None:
-        """Create the append-only event log table with tenant-scoped unique constraints."""
+        """Create the append-oriented event log table and archive tables with tenant-scoped constraints."""
         with self._conn:
             self._conn.execute(
                 """
@@ -53,6 +52,34 @@ class SqliteIncidentRepository(IncidentRepository):
                 ON incident_events (tenant_id, case_id, stream_version)
                 """
             )
+            self._conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS archived_incident_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    archive_run_id TEXT NOT NULL,
+                    tenant_id TEXT NOT NULL,
+                    case_id TEXT NOT NULL,
+                    stream_version INTEGER NOT NULL,
+                    event_type TEXT NOT NULL,
+                    payload TEXT NOT NULL,
+                    occurred_at TEXT NOT NULL,
+                    archived_at TEXT NOT NULL
+                )
+                """
+            )
+            self._conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS evaluation_reset_journal (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    archive_run_id TEXT NOT NULL,
+                    tenant_id TEXT NOT NULL,
+                    case_id TEXT NOT NULL,
+                    event_count INTEGER NOT NULL,
+                    reset_by_principal_id TEXT NOT NULL,
+                    archived_at TEXT NOT NULL
+                )
+                """
+            )
 
     def close(self) -> None:
         """Close SQLite database connection."""
@@ -68,7 +95,7 @@ class SqliteIncidentRepository(IncidentRepository):
             """,
             (tenant_id, case_id),
         )
-        events = []
+        events: list[object] = []
         for row in cursor.fetchall():
             event_obj = Event.validate_json(row["payload"])
             events.append(event_obj)
@@ -106,7 +133,7 @@ class SqliteIncidentRepository(IncidentRepository):
                         tenant_id=tenant_id,
                         phase="signal_received",
                         case_version=0,
-                        source_record_ids=(),
+                        source_record_ids=("DEFAULT-SOURCE-RECORD",),
                         created_at=datetime.now(UTC),
                         updated_at=datetime.now(UTC),
                     ),
@@ -151,9 +178,17 @@ class SqliteIncidentRepository(IncidentRepository):
                     for idx, ev in enumerate(events):
                         next_version = expected_version + idx + 1
                         event_type = getattr(ev, "kind", type(ev).__name__)
-                        payload = ev.model_dump_json() if hasattr(ev, "model_dump_json") else json.dumps(ev)
-                        occurred = getattr(ev, "occurred_at", getattr(ev, "decided_at", datetime.now(UTC)))
-                        occurred_iso = occurred.isoformat() if isinstance(occurred, datetime) else now_iso
+                        payload = (
+                            ev.model_dump_json()
+                            if hasattr(ev, "model_dump_json")
+                            else json.dumps(ev)
+                        )
+                        occurred = getattr(
+                            ev, "occurred_at", getattr(ev, "decided_at", datetime.now(UTC))
+                        )
+                        occurred_iso = (
+                            occurred.isoformat() if isinstance(occurred, datetime) else now_iso
+                        )
 
                         self._conn.execute(
                             """
@@ -180,7 +215,7 @@ class SqliteIncidentRepository(IncidentRepository):
                         tenant_id=tenant_id,
                         phase="signal_received",
                         case_version=0,
-                        source_record_ids=(),
+                        source_record_ids=("DEFAULT-SOURCE-RECORD",),
                         created_at=datetime.now(UTC),
                         updated_at=datetime.now(UTC),
                     ),
@@ -211,3 +246,78 @@ class SqliteIncidentRepository(IncidentRepository):
                 event_obj = Event.validate_json(row["payload"])
                 events.append(event_obj)
             return tuple(events)
+
+    async def archive_and_reset(
+        self,
+        tenant_id: str,
+        case_id: str,
+        reset_by_principal_id: str = "EVAL-ADMIN-01",
+    ) -> int:
+        """Atomically archive all events for a tenant/case, record journal, and reset active stream."""
+        import uuid
+
+        archive_run_id = str(uuid.uuid4())
+        archived_at = datetime.now(UTC).isoformat()
+
+        async with self._lock:
+            with self._conn:
+                cursor = self._conn.execute(
+                    """
+                    SELECT COUNT(*) as cnt FROM incident_events
+                    WHERE tenant_id = ? AND case_id = ?
+                    """,
+                    (tenant_id, case_id),
+                )
+                row = cursor.fetchone()
+                src_count = int(row["cnt"]) if row else 0
+
+                if src_count > 0:
+                    self._conn.execute(
+                        """
+                        INSERT INTO archived_incident_events (
+                            archive_run_id, tenant_id, case_id, stream_version, event_type, payload, occurred_at, archived_at
+                        )
+                        SELECT ?, tenant_id, case_id, stream_version, event_type, payload, occurred_at, ?
+                        FROM incident_events
+                        WHERE tenant_id = ? AND case_id = ?
+                        ORDER BY stream_version ASC
+                        """,
+                        (archive_run_id, archived_at, tenant_id, case_id),
+                    )
+
+                    # Verify copy count before deletion
+                    verify_cursor = self._conn.execute(
+                        "SELECT COUNT(*) as cnt FROM archived_incident_events WHERE archive_run_id = ?",
+                        (archive_run_id,),
+                    )
+                    verify_row = verify_cursor.fetchone()
+                    copied_count = int(verify_row["cnt"]) if verify_row else 0
+                    if copied_count != src_count:
+                        raise RuntimeError(
+                            f"Archive integrity verification failed: expected {src_count} rows, copied {copied_count}"
+                        )
+
+                    # Delete active stream rows
+                    self._conn.execute(
+                        "DELETE FROM incident_events WHERE tenant_id = ? AND case_id = ?",
+                        (tenant_id, case_id),
+                    )
+
+                # Persist reset journal record outside cleared active stream
+                self._conn.execute(
+                    """
+                    INSERT INTO evaluation_reset_journal (
+                        archive_run_id, tenant_id, case_id, event_count, reset_by_principal_id, archived_at
+                    ) VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        archive_run_id,
+                        tenant_id,
+                        case_id,
+                        src_count,
+                        reset_by_principal_id,
+                        archived_at,
+                    ),
+                )
+
+            return src_count

@@ -28,7 +28,9 @@ class InMemoryIncidentRepository(IncidentRepository):
             self._states[state.case.case_id] = state
             self._events[state.case.case_id] = []
 
-    async def load(self, case_id: str) -> IncidentState | None:
+    async def load(
+        self, case_id: str, *, tenant_id: str = "EVAL-TENANT-01"
+    ) -> IncidentState | None:
         """Retrieve the current state for the given case ID."""
         async with self._lock:
             return self._states.get(case_id)
@@ -38,6 +40,8 @@ class InMemoryIncidentRepository(IncidentRepository):
         case_id: str,
         expected_version: int,
         events: Sequence[object],
+        *,
+        tenant_id: str = "EVAL-TENANT-01",
     ) -> IncidentState:
         """Append events with compare-and-set version verification."""
         async with self._lock:
@@ -62,6 +66,8 @@ class InMemoryIncidentRepository(IncidentRepository):
         self,
         case_id: str,
         after_sequence: int = 0,
+        *,
+        tenant_id: str = "EVAL-TENANT-01",
     ) -> Sequence[object]:
         """Fetch all recorded events for a case after a given sequence index."""
         async with self._lock:

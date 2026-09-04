@@ -100,7 +100,9 @@ class EvidenceSpan(DomainRecord):
     @model_validator(mode="after")
     def validate_offset_range(self) -> Self:
         if self.end_offset <= self.start_offset:
-            raise ValueError(f"end_offset ({self.end_offset}) must be strictly greater than start_offset ({self.start_offset})")
+            raise ValueError(
+                f"end_offset ({self.end_offset}) must be strictly greater than start_offset ({self.start_offset})"
+            )
         return self
 
 
@@ -111,10 +113,13 @@ class AffectedScope(DomainRecord):
     case_version: NonNegativeVersion
     scope_version: NonNegativeVersion
     status: Literal["proposed", "approved", "superseded"]
-    affected_record_ids: Annotated[tuple[Identifier, ...], Field(min_length=1)]
+    affected_record_ids: tuple[Identifier, ...] = ()
     evidence_record_ids: Annotated[tuple[Identifier, ...], Field(min_length=1)]
     affected_quantity: NonNegativeQuantity
     created_at: datetime
+    requester_id: Identifier | None = None
+    ingredient_lot: Identifier | None = None
+    pathogen: str | None = None
 
 
 class ImpactRecord(DomainRecord):
@@ -142,6 +147,7 @@ class ContainmentAction(DomainRecord):
     quantity: NonNegativeQuantity
     policy_version: Identifier
     requested_at: datetime
+    requester_id: Identifier | None = None
     hold_expires_at: datetime | None = None
     idempotency_token: Identifier | None = None
     payload_hash: Identifier | None = None
@@ -149,7 +155,9 @@ class ContainmentAction(DomainRecord):
     attempt: NonNegativeVersion = 0
 
 
-Role = Literal["recall_coordinator", "qa", "customer_operations", "agent_service", "closure_authority"]
+Role = Literal[
+    "recall_coordinator", "qa", "customer_operations", "agent_service", "closure_authority"
+]
 
 
 class ApprovalDecision(DomainRecord):
@@ -164,10 +172,12 @@ class ApprovalDecision(DomainRecord):
     approver_id: Identifier
     approver_role: Role | None = None
     case_version: NonNegativeVersion
-    boundary_version: Identifier
+    boundary_version: Identifier | None = None
     scope_id: Identifier | None = None
     scope_version: NonNegativeVersion | None = None
+    packet_id: Identifier | None = None
     payload_version: Identifier | None = None
+    payload_hash: Identifier | None = None
     policy_version: Identifier | None = None
     retest_doc_id: Identifier | None = None
     retest_doc_hash: Sha256Hash | None = None
@@ -176,7 +186,9 @@ class ApprovalDecision(DomainRecord):
     @model_validator(mode="after")
     def validate_release_evidence(self) -> Self:
         if self.approval_type == "release" and not (self.retest_doc_id and self.retest_doc_hash):
-            raise ValueError("Release approval decision requires both retest_doc_id and verified 64-char hex retest_doc_hash")
+            raise ValueError(
+                "Release approval decision requires both retest_doc_id and verified 64-char hex retest_doc_hash"
+            )
         return self
 
 
@@ -188,9 +200,11 @@ class NotificationPacket(DomainRecord):
     scope_version: NonNegativeVersion
     payload_version: Identifier
     payload_hash: Identifier
+    policy_version: Identifier = "EVAL-HOLD-01"
     status: Literal["planned", "in_flight", "sent", "failed", "unknown"]
     recipient_ids: Annotated[tuple[Identifier, ...], Field(min_length=1)]
     created_at: datetime
+    requester_id: Identifier | None = None
 
 
 class Acknowledgement(DomainRecord):
@@ -240,10 +254,28 @@ class RecoveryState(DomainRecord):
     @model_validator(mode="after")
     def validate_phase_consistency(self) -> Self:
         if self.parent_phase != self.return_phase:
-            raise ValueError(f"parent_phase ({self.parent_phase}) must match return_phase ({self.return_phase})")
+            raise ValueError(
+                f"parent_phase ({self.parent_phase}) must match return_phase ({self.return_phase})"
+            )
         if self.parent_phase == "closed":
             raise ValueError("Recovery state cannot pause in or return to terminal 'closed' phase")
         return self
+
+
+class ClosureRequest(DomainRecord):
+    request_id: Identifier
+    tenant_id: Identifier
+    case_id: Identifier
+    requester_principal_id: Identifier
+    case_version: NonNegativeVersion
+    requested_scope_version: NonNegativeVersion
+    requested_policy_version: Identifier
+    closure_id: Identifier
+    outstanding_acknowledgement_ids: tuple[Identifier, ...] = ()
+    evidence_record_ids: tuple[Identifier, ...] = ()
+    request_stream_version: NonNegativeVersion
+    is_consumed: bool = False
+    requested_at: datetime
 
 
 class IncidentState(DomainRecord):
@@ -254,6 +286,7 @@ class IncidentState(DomainRecord):
     notification_packets: tuple[NotificationPacket, ...] = ()
     acknowledgements: tuple[Acknowledgement, ...] = ()
     approvals: tuple[ApprovalDecision, ...] = ()
+    closure_requests: tuple[ClosureRequest, ...] = ()
     ledger: tuple[LedgerEntry, ...] = ()
     recovery: RecoveryState | None = None
     updated_at: datetime
@@ -264,17 +297,32 @@ class IncidentState(DomainRecord):
         case_id = self.case.case_id
         for s in self.scopes:
             if s.tenant_id != tenant_id or s.case_id != case_id:
-                raise ValueError(f"Scope {s.scope_id} tenant/case mismatch with parent case ({tenant_id}/{case_id})")
+                raise ValueError(
+                    f"Scope {s.scope_id} tenant/case mismatch with parent case ({tenant_id}/{case_id})"
+                )
         for a in self.containment_actions:
             if a.tenant_id != tenant_id or a.case_id != case_id:
-                raise ValueError(f"Containment action {a.action_id} tenant/case mismatch with parent case ({tenant_id}/{case_id})")
+                raise ValueError(
+                    f"Containment action {a.action_id} tenant/case mismatch with parent case ({tenant_id}/{case_id})"
+                )
         for app in self.approvals:
             if app.tenant_id != tenant_id or app.case_id != case_id:
-                raise ValueError(f"Approval {app.approval_id} tenant/case mismatch with parent case ({tenant_id}/{case_id})")
+                raise ValueError(
+                    f"Approval {app.approval_id} tenant/case mismatch with parent case ({tenant_id}/{case_id})"
+                )
+        for req in self.closure_requests:
+            if req.tenant_id != tenant_id or req.case_id != case_id:
+                raise ValueError(
+                    f"ClosureRequest {req.request_id} tenant/case mismatch with parent case ({tenant_id}/{case_id})"
+                )
         for ack in self.acknowledgements:
             if ack.tenant_id != tenant_id or ack.case_id != case_id:
-                raise ValueError(f"Acknowledgement {ack.acknowledgement_id} tenant/case mismatch with parent case ({tenant_id}/{case_id})")
-        for l in self.ledger:
-            if l.tenant_id != tenant_id or l.case_id != case_id:
-                raise ValueError(f"Ledger entry {l.ledger_id} tenant/case mismatch with parent case ({tenant_id}/{case_id})")
+                raise ValueError(
+                    f"Acknowledgement {ack.acknowledgement_id} tenant/case mismatch with parent case ({tenant_id}/{case_id})"
+                )
+        for entry in self.ledger:
+            if entry.tenant_id != tenant_id or entry.case_id != case_id:
+                raise ValueError(
+                    f"Ledger entry {entry.ledger_id} tenant/case mismatch with parent case ({tenant_id}/{case_id})"
+                )
         return self

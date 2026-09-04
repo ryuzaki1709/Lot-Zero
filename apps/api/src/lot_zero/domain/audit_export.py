@@ -28,7 +28,7 @@ class AuditExportEventItem(BaseModel):
 
 
 class AuditExportBundle(BaseModel):
-    """Complete, self-verifying, tamper-evident audit export for regulatory compliance."""
+    """Self-verifying, tamper-evident prototype audit export (modeled workflow, not a legal or regulatory certification)."""
 
     export_id: str
     tenant_id: str
@@ -70,7 +70,7 @@ def generate_audit_export(
     exported_by_principal_id: str,
 ) -> AuditExportBundle | None:
     """Export the ordered event stream for a case as a signed, hash-chained audit bundle.
-    
+
     Scoped strictly by tenant_id and case_id. Returns None if case does not exist.
     """
     cursor = conn.execute(
@@ -104,7 +104,9 @@ def generate_audit_export(
 
         # Canonical SHA-256 hash of the event payload
         payload_hash = canonical_sha256(payload_dict)
-        event_id = payload_dict.get("event_id", payload_dict.get("approval_id", f"EVT-{stream_version}"))
+        event_id = payload_dict.get(
+            "event_id", payload_dict.get("approval_id", f"EVT-{stream_version}")
+        )
 
         entry_hash = compute_audit_entry_hash(
             sequence=idx,

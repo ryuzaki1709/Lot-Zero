@@ -1,7 +1,23 @@
 import React from 'react';
 
 export function GenealogyGraph({ genealogy, metrics, phase, isQaApproved }) {
-  if (!genealogy || !Array.isArray(genealogy.nodes)) return null;
+  if (!genealogy || !Array.isArray(genealogy.nodes) || genealogy.nodes.length === 0) {
+    return (
+      <section className="section">
+        <div className="section-head">
+          <div>
+            <h2 className="section-title">Traceability</h2>
+            <p className="section-desc">
+              Bidirectional genealogy from supplier intake to finished goods. Awaiting safety signal.
+            </p>
+          </div>
+        </div>
+        <div className="card-panel" style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13.5px' }}>
+          No active recall scope. Simulate a safety signal to generate the production genealogy DAG.
+        </div>
+      </section>
+    );
+  }
 
   const isHoldActive = [
     'provisional_containment',
@@ -76,7 +92,7 @@ export function GenealogyGraph({ genealogy, metrics, phase, isQaApproved }) {
         </div>
       </div>
 
-      <div className="card-panel" style={{ padding: '24px' }}>
+      <div className="card-panel" style={{ overflowX: 'auto' }}>
         {/* Supplier Node */}
         {supplierNode && (
           <div
@@ -148,7 +164,7 @@ export function GenealogyGraph({ genealogy, metrics, phase, isQaApproved }) {
         {arrow('Packaging lines')}
 
         {/* Downstream batches */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
+        <div className="grid-auto-xs">
           {finishedNodes.map((b) => {
             const isReleased = b.hold_status === 'released_negative_retest';
             const isQuarantined = b.hold_status === 'quarantine_active';
@@ -227,6 +243,32 @@ export function GenealogyGraph({ genealogy, metrics, phase, isQaApproved }) {
             </div>
           )}
         </div>
+
+        {/* Unresolved Genealogy Boundaries Notice */}
+        {genealogy.unresolved_edges && genealogy.unresolved_edges.length > 0 && (
+          <div
+            style={{
+              marginTop: '16px',
+              padding: '12px 16px',
+              background: 'rgba(234, 179, 8, 0.08)',
+              border: '1px solid rgba(234, 179, 8, 0.25)',
+              borderRadius: 'var(--radius-md)',
+              fontSize: '13px',
+              color: 'var(--status-warning-text)',
+            }}
+          >
+            <div style={{ fontWeight: 600, marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span className="status-dot status-dot-warning" />
+              Traceability boundary notice (Incomplete downstream path)
+            </div>
+            {genealogy.unresolved_edges.map((e) => (
+              <div key={e.edge_id} style={{ color: 'var(--text-secondary)', marginTop: '4px' }}>
+                Edge <span className="mono-val">{e.edge_id}</span> ({e.source_id} &rarr;{' '}
+                <span className="mono-val">{e.target_id}</span>) terminates at an unmapped transform node without finished product records. This boundary is recorded in the cryptographic audit trail and does not alter the verified hold scope.
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </section>
   );

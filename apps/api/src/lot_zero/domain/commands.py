@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from datetime import datetime
-from decimal import Decimal
 from typing import Annotated, Literal
 
 from pydantic import Field, TypeAdapter
 
 from .identifiers import ActionIntent
 from .models import DomainRecord, Identifier, NonNegativeQuantity, NonNegativeVersion
+from .transitions import PrimaryPhase
 
 
 class CommandRecord(DomainRecord):
@@ -21,22 +21,36 @@ class CommandRecord(DomainRecord):
 
 
 class ProposeScopeCommand(CommandRecord):
-    kind: Literal["propose_scope"]
+    kind: Literal["propose_scope"] = "propose_scope"
     scope_id: Identifier
     scope_version: NonNegativeVersion
     affected_record_ids: tuple[Identifier, ...] = ()
-    affected_quantity: NonNegativeQuantity = Decimal("0")
+    affected_quantity: NonNegativeQuantity
     evidence_record_ids: Annotated[tuple[Identifier, ...], Field(min_length=1)]
     policy_version: Identifier
+    ingredient_lot: Identifier | None = None
+    pathogen: str | None = None
 
 
 class RequestContainmentCommand(CommandRecord):
-    kind: Literal["request_containment"]
+    kind: Literal["request_containment"] = "request_containment"
     scope_id: Identifier
     scope_version: NonNegativeVersion
     policy_version: Identifier
     action_type: Literal["provisional_hold", "release_hold"]
     target_record_ids: Annotated[tuple[Identifier, ...], Field(min_length=1)]
+    quantity: NonNegativeQuantity
+
+
+class RequestNotificationCommand(CommandRecord):
+    kind: Literal["request_notification"] = "request_notification"
+    scope_id: Identifier
+    scope_version: NonNegativeVersion
+    packet_id: Identifier
+    payload_version: Identifier
+    payload_hash: Identifier
+    policy_version: Identifier
+    recipient_ids: Annotated[tuple[Identifier, ...], Field(min_length=1)]
 
 
 class SendNotificationCommand(CommandRecord):
@@ -45,6 +59,7 @@ class SendNotificationCommand(CommandRecord):
     scope_version: NonNegativeVersion
     packet_id: Identifier
     payload_version: Identifier
+    payload_hash: Identifier
     policy_version: Identifier
     recipient_ids: Annotated[tuple[Identifier, ...], Field(min_length=1)]
 
@@ -64,10 +79,14 @@ class RecordAcknowledgementCommand(CommandRecord):
 
 
 class RequestClosureCommand(CommandRecord):
-    kind: Literal["request_closure"]
+    kind: Literal["request_closure"] = "request_closure"
+    request_id: Identifier
     closure_id: Identifier
     policy_version: Identifier
+    scope_id: Identifier | None = None
+    scope_version: NonNegativeVersion = 0
     outstanding_acknowledgement_ids: tuple[Identifier, ...] = ()
+    evidence_record_ids: tuple[Identifier, ...] = ()
 
 
 class ApprovalCommand(CommandRecord):
@@ -97,11 +116,16 @@ class ApproveNotificationCommand(ApprovalCommand):
     scope_version: NonNegativeVersion
     packet_id: Identifier
     payload_version: Identifier
+    payload_hash: Identifier
     policy_version: Identifier
 
 
 class ApproveClosureCommand(ApprovalCommand):
     kind: Literal["approve_closure"]
+    request_id: Identifier
+    expected_request_stream_version: NonNegativeVersion
+    expected_scope_version: NonNegativeVersion = 0
+    expected_policy_version: Identifier = "EVAL-CLOSE-01"
     closure_id: Identifier
     policy_version: Identifier
     effectiveness_evidence_ids: Annotated[tuple[Identifier, ...], Field(min_length=1)]
@@ -123,6 +147,12 @@ class ExecuteStandingPolicyCommand(CommandRecord):
     intent: ActionIntent
 
 
+class AdvancePhaseCommand(CommandRecord):
+    kind: Literal["advance_phase"] = "advance_phase"
+    target_phase: PrimaryPhase
+    rationale: str | None = None
+
+
 type CommandValue = Annotated[
     ProposeScopeCommand
     | RequestContainmentCommand
@@ -134,8 +164,8 @@ type CommandValue = Annotated[
     | ApproveNotificationCommand
     | ApproveClosureCommand
     | ApproveReleaseCommand
-    | ExecuteStandingPolicyCommand,
+    | ExecuteStandingPolicyCommand
+    | AdvancePhaseCommand,
     Field(discriminator="kind"),
 ]
-Command = TypeAdapter(CommandValue)
-
+Command: TypeAdapter[CommandValue] = TypeAdapter(CommandValue)

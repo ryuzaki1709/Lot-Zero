@@ -5,22 +5,26 @@ from datetime import UTC, datetime
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "apps" / "api" / "src"))
+os.environ["LOT_ZERO_EVALUATION_MODE"] = "true"
 
 from fastapi.testclient import TestClient
 from lot_zero.app import app
+
 from lot_zero.domain.audit_export import verify_audit_bundle
 
+KEY_ADMIN = "key-eval-admin-01"
 KEY_COORD = "key-recall-coord-01"
 KEY_QA = "key-qa-lead-01"
 KEY_OPS = "key-ops-01"
 KEY_CLOSURE = "key-closure-auth-01"
 
+
 def run_lifecycle_verification():
     print("=== STARTING END-TO-END RUNTIME VERIFICATION ===")
     with TestClient(app) as client:
-        # Step 1: Clean Baseline Reset
+        # Step 1: Clean Baseline Reset as Evaluation Administrator
         print("\n1. Resetting baseline...")
-        res_reset = client.post("/api/evaluation/reset", headers={"X-API-Key": KEY_COORD})
+        res_reset = client.post("/api/evaluation/reset", headers={"X-API-Key": KEY_ADMIN})
         assert res_reset.status_code == 200, f"Reset failed: {res_reset.text}"
         print("[OK] Baseline reset successful")
 
@@ -48,6 +52,42 @@ def run_lifecycle_verification():
         )
         assert res_app.status_code == 200
         print("[OK] QA Containment approval verified")
+
+        # Step 4a: Recall Coordinator Requests Notification Packet Drafting
+        print("\n4a. Recall Coordinator requesting notification packet drafting...")
+        res_req_notif = client.post(
+            "/api/evaluation/request-notification",
+            headers={"X-API-Key": KEY_COORD},
+            json={
+                "packet_id": "PKT-001",
+                "scope_id": "SCOPE-EVAL-01",
+                "scope_version": 1,
+                "payload_version": "PAYLOAD-001",
+                "payload_hash": "payload-sha256-verified-digest",
+                "policy_version": "EVAL-HOLD-01",
+            },
+        )
+        assert res_req_notif.status_code == 200
+        print("[OK] Recall Coordinator notification request verified")
+
+        # Step 4b: Customer Operations Notification Approval
+        print("\n4b. Customer Operations approving notification packet...")
+        res_notif = client.post(
+
+            "/api/evaluation/approve-notification",
+            headers={"X-API-Key": KEY_OPS},
+            json={
+                "packet_id": "PKT-001",
+                "payload_version": "PAYLOAD-001",
+                "payload_hash": "payload-sha256-verified-digest",
+                "scope_id": "SCOPE-EVAL-01",
+                "scope_version": 1,
+                "policy_version": "EVAL-HOLD-01",
+                "rationale": "Notification packet payload approved for outbox delivery.",
+            },
+        )
+        assert res_notif.status_code == 200
+        print("[OK] Customer Operations notification approval verified")
 
         # Step 5: Dispatch Consignee Outbox
         print("\n5. Customer Operations dispatching recall notices...")

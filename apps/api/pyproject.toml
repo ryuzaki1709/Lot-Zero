@@ -20,11 +20,13 @@ packages = ["src/lot_zero"]
 
 [project.optional-dependencies]
 dev = [
+  "hypothesis>=6.112,<7",
   "jsonschema>=4.23,<5",
   "mypy>=1.11,<2",
   "pytest>=8.3,<9",
   "ruff>=0.6,<1",
 ]
+
 
 [tool.pytest.ini_options]
 addopts = "-ra"
@@ -37,6 +39,8 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]
+ignore = ["E501"]
+
 
 [tool.mypy]
 python_version = "3.12"

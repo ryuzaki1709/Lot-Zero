@@ -32,9 +32,7 @@ def exact_lot_match(expected: str, candidate: str) -> bool:
     expected_normalized = _normalize_lot(expected)
     candidate_normalized = _normalize_lot(candidate)
     return bool(
-        expected_normalized
-        and candidate_normalized
-        and expected_normalized == candidate_normalized
+        expected_normalized and candidate_normalized and expected_normalized == candidate_normalized
     )
 
 
@@ -239,21 +237,22 @@ def compute_impact(
                 evidence_ids=evidence_ids if affected else (),
             )
         )
-    for record in shipments:
-        affected = record.lot_id in affected_lot_id_set
+    for ship in shipments:
+        affected = ship.lot_id in affected_lot_id_set
         evaluations.append(
             ImpactEvaluation(
-                record_id=record.record_id,
+                record_id=ship.record_id,
                 tenant_id=scope.tenant_id,
                 case_id=scope.case_id,
                 record_type="shipment",
-                quantity=record.quantity,
+                quantity=ship.quantity,
                 affected=affected,
-                paths=paths_by_lot.get(record.lot_id, ()) if affected else (),
+                paths=paths_by_lot.get(ship.lot_id, ()) if affected else (),
                 predicate_ids=predicate_ids if affected else (),
                 evidence_ids=evidence_ids if affected else (),
             )
         )
+
     sorted_evaluations = tuple(
         sorted(evaluations, key=lambda result: (result.record_type, result.record_id))
     )

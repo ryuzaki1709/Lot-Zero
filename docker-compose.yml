@@ -5,10 +5,13 @@ services:
       dockerfile: Dockerfile
     container_name: lot-zero-workspace
     ports:
-      - "8000:8000"
+      - "8000:8080"
     environment:
       - LOT_ZERO_DB_PATH=/app/data/lot_zero.db
       - LOT_ZERO_TENANT_ID=EVAL-TENANT-01
+      - LOT_ZERO_EVALUATION_MODE=true
+      - LOT_ZERO_SSE_SECRET=lot-zero-ephemeral-sse-token-secret-key-2026
+
     volumes:
       - lot-zero-data:/app/data
     restart: unless-stopped

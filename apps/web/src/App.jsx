@@ -8,15 +8,17 @@ import { GenealogyGraph } from './components/GenealogyGraph';
 import { ApprovalGate } from './components/ApprovalGate';
 import { EvidenceLedger } from './components/EvidenceLedger';
 import { HowItWorksModal } from './components/HowItWorksModal';
+import { normalizeConfig, buildRequestHeaders, canStartSse } from './utils/authConfig';
 import './styles/antigravity.css';
+import './styles/responsive.css';
 
 const API_BASE = '';
 
 export function App() {
   const [currentCaseId, setCurrentCaseId] = useState('EVAL-CASE-01');
-  const [activeApiKey, setActiveApiKey] = useState(
-    localStorage.getItem('lot_zero_api_key') || 'key-recall-coord-01'
-  );
+  const [configStatus, setConfigStatus] = useState('loading'); // 'loading' | 'ready' | 'failed'
+  const [activeApiKey, setActiveApiKey] = useState('');
+  const [appConfig, setAppConfig] = useState({ evaluation_mode: false, tenant_id: '', personas: [] });
   const [projection, setProjection] = useState(null);
   const [loading, setLoading] = useState(false);
   const [sseConnected, setSseConnected] = useState(false);
@@ -24,11 +26,37 @@ export function App() {
   const [attestationData, setAttestationData] = useState(null);
   const [feedback, setFeedback] = useState(null); // { type: 'error' | 'success', message: string }
 
+  // Load server-side runtime configuration and evaluation personas (fail-closed)
+  useEffect(() => {
+    fetch(`${API_BASE}/api/config`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        const storedKey = localStorage.getItem('lot_zero_api_key') || '';
+        const { config, activeApiKey: resolvedKey } = normalizeConfig(data, storedKey, localStorage);
+        setAppConfig(config);
+        setActiveApiKey(resolvedKey);
+        setConfigStatus(data ? 'ready' : 'failed');
+      })
+      .catch(() => {
+        const storedKey = localStorage.getItem('lot_zero_api_key') || '';
+        const { config, activeApiKey: resolvedKey } = normalizeConfig(null, storedKey, localStorage);
+        setAppConfig(config);
+        setActiveApiKey(resolvedKey);
+        setConfigStatus('failed');
+      });
+  }, []);
+
   const handleApiKeyChange = (key) => {
     setActiveApiKey(key);
-    localStorage.setItem('lot_zero_api_key', key);
+    if (key) {
+      localStorage.setItem('lot_zero_api_key', key);
+    } else {
+      localStorage.removeItem('lot_zero_api_key');
+    }
     setFeedback(null);
   };
+
+
 
   const handleApiError = async (res, defaultAction = 'Action') => {
     let detail = res.statusText;
@@ -47,7 +75,7 @@ export function App() {
     setFeedback(null);
     try {
       const res = await fetch(`${API_BASE}/api/cases/${currentCaseId}/audit-export`, {
-        headers: { 'X-API-Key': activeApiKey },
+        headers: buildRequestHeaders(activeApiKey, appConfig.evaluation_mode),
       });
       if (res.ok) {
         const data = await res.json();
@@ -71,16 +99,22 @@ export function App() {
     }
   };
 
-  // Fetch initial projection and subscribe to SSE with short-lived HMAC token
+  // Fetch initial projection and subscribe to SSE only after config resolves and auth is valid
   useEffect(() => {
+    if (configStatus !== 'ready') {
+      return;
+    }
+
     let eventSource = null;
     let isCancelled = false;
     let reconnectTimeout = null;
 
+    const authHeaders = buildRequestHeaders(activeApiKey, appConfig.evaluation_mode);
+
     const fetchInitial = async () => {
       try {
         const res = await fetch(`${API_BASE}/api/incidents/${currentCaseId}`, {
-          headers: { 'X-API-Key': activeApiKey },
+          headers: authHeaders,
         });
         if (res.ok) {
           const data = await res.json();
@@ -96,10 +130,15 @@ export function App() {
     fetchInitial();
 
     const connectSSE = async () => {
+      if (!canStartSse(configStatus, activeApiKey, appConfig.evaluation_mode)) {
+        if (!isCancelled) setSseConnected(false);
+        return;
+      }
+
       try {
         const tokenRes = await fetch(`${API_BASE}/api/sse-token`, {
           method: 'POST',
-          headers: { 'X-API-Key': activeApiKey },
+          headers: authHeaders,
         });
         if (!tokenRes.ok) {
           if (!isCancelled) setSseConnected(false);
@@ -144,7 +183,7 @@ export function App() {
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
       if (eventSource) eventSource.close();
     };
-  }, [currentCaseId, activeApiKey]);
+  }, [currentCaseId, activeApiKey, configStatus, appConfig.evaluation_mode]);
 
   const handleSimulateSignal = async () => {
     setLoading(true);
@@ -152,7 +191,7 @@ export function App() {
     try {
       const res = await fetch(`${API_BASE}/api/evaluation/simulate-signal`, {
         method: 'POST',
-        headers: { 'X-API-Key': activeApiKey },
+        headers: buildRequestHeaders(activeApiKey, appConfig.evaluation_mode),
       });
       if (res.ok) {
         const data = await res.json();
@@ -174,10 +213,9 @@ export function App() {
     try {
       const res = await fetch(`${API_BASE}/api/evaluation/approve-containment`, {
         method: 'POST',
-        headers: {
+        headers: buildRequestHeaders(activeApiKey, appConfig.evaluation_mode, {
           'Content-Type': 'application/json',
-          'X-API-Key': activeApiKey,
-        },
+        }),
         body: JSON.stringify({ rationale }),
       });
       if (res.ok) {
@@ -194,13 +232,68 @@ export function App() {
     }
   };
 
+  const handleRequestNotification = async () => {
+    setLoading(true);
+    setFeedback(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/evaluation/request-notification`, {
+        method: 'POST',
+        headers: buildRequestHeaders(activeApiKey, appConfig.evaluation_mode),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.projection) setProjection(data.projection);
+        setFeedback({ type: 'success', message: 'Notification packet PKT-001 drafted and requested by Recall Coordinator.' });
+      } else {
+        await handleApiError(res, 'Request notification');
+      }
+    } catch (err) {
+      setFeedback({ type: 'error', message: `Network error: ${err.message}` });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleApproveNotification = async (payload) => {
+    setLoading(true);
+    setFeedback(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/evaluation/approve-notification`, {
+        method: 'POST',
+        headers: buildRequestHeaders(activeApiKey, appConfig.evaluation_mode, {
+          'Content-Type': 'application/json',
+        }),
+        body: JSON.stringify({
+          packet_id: payload.packet_id,
+          scope_id: payload.scope_id,
+          scope_version: payload.scope_version,
+          payload_version: payload.payload_version,
+          payload_hash: payload.payload_hash,
+          policy_version: payload.policy_version,
+          rationale: payload.rationale,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.projection) setProjection(data.projection);
+        setFeedback({ type: 'success', message: 'Recall notification packet payload approved by Customer Operations.' });
+      } else {
+        await handleApiError(res, 'Approve notification');
+      }
+    } catch (err) {
+      setFeedback({ type: 'error', message: `Network error: ${err.message}` });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleDispatchOutbox = async () => {
     setLoading(true);
     setFeedback(null);
     try {
       const res = await fetch(`${API_BASE}/api/evaluation/dispatch-outbox`, {
         method: 'POST',
-        headers: { 'X-API-Key': activeApiKey },
+        headers: buildRequestHeaders(activeApiKey, appConfig.evaluation_mode),
       });
       if (res.ok) {
         const data = await res.json();
@@ -222,10 +315,9 @@ export function App() {
     try {
       const res = await fetch(`${API_BASE}/api/evaluation/resolve-ack`, {
         method: 'POST',
-        headers: {
+        headers: buildRequestHeaders(activeApiKey, appConfig.evaluation_mode, {
           'Content-Type': 'application/json',
-          'X-API-Key': activeApiKey,
-        },
+        }),
         body: JSON.stringify({
           caller_id: payload.caller_id,
           recipient_contact: payload.recipient_contact,
@@ -255,7 +347,35 @@ export function App() {
     try {
       const res = await fetch(`${API_BASE}/api/evaluation/request-closure`, {
         method: 'POST',
-        headers: { 'X-API-Key': activeApiKey },
+        headers: buildRequestHeaders(activeApiKey, appConfig.evaluation_mode),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.projection) setProjection(data.projection);
+        setFeedback({ type: 'success', message: `Closure review requested (${data.request_id || 'REQ-CLOSE'}). Pending Closure Authority authorization.` });
+      } else {
+        await handleApiError(res, 'Request closure');
+      }
+    } catch (err) {
+      setFeedback({ type: 'error', message: `Network error: ${err.message}` });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAuthorizeClosure = async (requestId) => {
+    setLoading(true);
+    setFeedback(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/evaluation/authorize-closure`, {
+        method: 'POST',
+        headers: buildRequestHeaders(activeApiKey, appConfig.evaluation_mode, {
+          'Content-Type': 'application/json',
+        }),
+        body: JSON.stringify({
+          request_id: requestId || undefined,
+          rationale: 'Verified all consignee acknowledgements and containment complete.',
+        }),
       });
       if (res.ok) {
         const data = await res.json();
@@ -273,7 +393,7 @@ export function App() {
           setFeedback({ type: 'success', message: 'Incident case closed successfully.' });
         }
       } else {
-        await handleApiError(res, 'Request closure');
+        await handleApiError(res, 'Authorize closure');
       }
     } catch (err) {
       setFeedback({ type: 'error', message: `Network error: ${err.message}` });
@@ -282,6 +402,7 @@ export function App() {
     }
   };
 
+
   // Perform exactly ONE release step per invocation, signed by the active role
   const handleReleaseHold = async (payload) => {
     setLoading(true);
@@ -289,10 +410,9 @@ export function App() {
     try {
       const res = await fetch(`${API_BASE}/api/evaluation/release-hold/step`, {
         method: 'POST',
-        headers: {
+        headers: buildRequestHeaders(activeApiKey, appConfig.evaluation_mode, {
           'Content-Type': 'application/json',
-          'X-API-Key': activeApiKey,
-        },
+        }),
         body: JSON.stringify({
           retest_doc_id: payload.retest_doc_id,
           retest_doc_hash: payload.retest_doc_hash,
@@ -325,10 +445,9 @@ export function App() {
     try {
       const res = await fetch(`${API_BASE}/api/evaluation/close-with-non-response`, {
         method: 'POST',
-        headers: {
+        headers: buildRequestHeaders(activeApiKey, appConfig.evaluation_mode, {
           'Content-Type': 'application/json',
-          'X-API-Key': activeApiKey,
-        },
+        }),
         body: JSON.stringify({
           attempt_count: payload.attempt_count,
           regulatory_filing_id: payload.regulatory_filing_id,
@@ -340,7 +459,7 @@ export function App() {
         if (data.projection) setProjection(data.projection);
         setFeedback({
           type: 'success',
-          message: 'Incident closed under 21 CFR § 7.49 with certified non-response and FDA referral.',
+          message: 'Incident closed with synthetic non-response documentation and modeled referral note (not a legal or regulatory certification).',
         });
       } else {
         await handleApiError(res, 'Non-response closure');
@@ -358,7 +477,7 @@ export function App() {
     try {
       const res = await fetch(`${API_BASE}/api/evaluation/reset`, {
         method: 'POST',
-        headers: { 'X-API-Key': activeApiKey },
+        headers: buildRequestHeaders(activeApiKey, appConfig.evaluation_mode),
       });
       if (res.ok) {
         const data = await res.json();
@@ -387,9 +506,10 @@ export function App() {
   const isQaApproved = approvals?.some(
     (a) => a.decision === 'approved' && a.approval_type === 'containment'
   );
+  const isActionDisabled = loading || configStatus !== 'ready';
 
   return (
-    <div style={{ minHeight: '100vh', paddingBottom: '32px', maxWidth: '1600px', margin: '0 auto' }}>
+    <div className="app-shell">
       <KineticBackground />
 
       <Header
@@ -400,34 +520,34 @@ export function App() {
         onExportAudit={handleExportAudit}
         activeApiKey={activeApiKey}
         onApiKeyChange={handleApiKeyChange}
-        loading={loading}
+        loading={isActionDisabled}
         sseConnected={sseConnected}
+        personas={appConfig.personas}
+        evaluationMode={appConfig.evaluation_mode}
       />
 
-      <StageProgress phase={phase} metrics={metrics} closureGate={closureGate} />
+
+      <div className="stepper-container">
+        <StageProgress phase={phase} metrics={metrics} closureGate={closureGate} />
+      </div>
 
       {/* Group 4a: Context selection (CaseDashboard) directly under StageProgress */}
-      <div style={{ margin: '0 24px 16px' }}>
+      <div className="case-dashboard-container">
         <CaseDashboard
           currentCaseId={currentCaseId}
           onSelectCase={(id) => setCurrentCaseId(id)}
           activePhase={phase}
-          approvals={approvals}
-          containmentActions={projection?.containment_actions}
           apiKey={activeApiKey}
+          evaluationMode={appConfig.evaluation_mode}
+          refreshTrigger={projection?.header?.case_version}
+          currentProjection={projection}
         />
       </div>
 
-      {/* Main Operational 3-Column Cockpit */}
-      <main
-        style={{
-          margin: '0 24px',
-          display: 'grid',
-          gridTemplateColumns: 'minmax(280px, 1fr) minmax(360px, 1.4fr) minmax(280px, 1fr)',
-          gap: '16px',
-          alignItems: 'start',
-        }}
-      >
+
+
+      {/* Main Operational Responsive Cockpit */}
+      <main className="cockpit-grid">
         {/* Global Denial/Error Surface (Group 1c) */}
         {feedback && (
           <div
@@ -473,12 +593,12 @@ export function App() {
         )}
 
         {/* Column 1: Signal Ingestion & Citations */}
-        <section style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <section className="cockpit-column">
           <SignalViewer signal={signal} scopes={projection?.scopes} modelName={modelName} />
         </section>
 
         {/* Column 2: Bidirectional DAG & Decision Gates */}
-        <section style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <section className="cockpit-column">
           <GenealogyGraph
             genealogy={genealogy}
             metrics={metrics}
@@ -488,20 +608,28 @@ export function App() {
           <ApprovalGate
             phase={phase}
             onApproveContainment={handleApproveContainment}
+            onRequestNotification={handleRequestNotification}
+            onApproveNotification={handleApproveNotification}
             onDispatchOutbox={handleDispatchOutbox}
             onResolveAck={handleResolveAck}
             onRequestClosure={handleRequestClosure}
+            onAuthorizeClosure={handleAuthorizeClosure}
             onReleaseHold={handleReleaseHold}
             onCloseWithNonResponse={handleCloseWithNonResponse}
-            loading={loading}
+            loading={isActionDisabled}
             approvals={approvals}
             closureGate={closureGate}
             containmentActions={projection?.containment_actions}
+            packets={projection?.packets}
+            closureRequests={projection?.closure_requests}
+            activeApiKey={activeApiKey}
+            evaluationMode={appConfig.evaluation_mode}
           />
+
         </section>
 
         {/* Column 3: Evidence Ledger, Signed Audit Signatures & Consignee Acks */}
-        <section style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <section className="cockpit-column">
           <EvidenceLedger
             acknowledgements={acks}
             closureGate={closureGate}

@@ -52,7 +52,7 @@ SVG_CONTENT = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" 
   <text x="70" y="278" fill="#00dc82" font-size="13" font-weight="600">Dual-Signature Release Rail</text>
   <text x="70" y="298" fill="#cbd5e1" font-size="11.5">Step 1: QA Lead Biological Clearance (Re-test Hash)</text>
   <text x="70" y="316" fill="#cbd5e1" font-size="11.5">Step 2: Closure Authority Operational Release</text>
-  <text x="70" y="334" fill="#94a3b8" font-size="11">• 21 CFR § 7.49 Non-Response Escalation Modal</text>
+  <text x="70" y="334" fill="#94a3b8" font-size="11">• Synthetic Non-Response Documentation Modal</text>
 
   <!-- Client Box 3: Real-Time Stream -->
   <rect x="56" y="365" width="278" height="85" rx="6" fill="url(#gradBox)" stroke="#475569" stroke-width="1"/>
@@ -92,7 +92,7 @@ SVG_CONTENT = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" 
   <text x="435" y="258" fill="#00dc82" font-size="13" font-weight="600">Separation of Duties Authority Kernel</text>
   <text x="435" y="278" fill="#cbd5e1" font-size="11.5">• Strict separation: Requester != Approver (403 on role collision)</text>
   <text x="435" y="296" fill="#cbd5e1" font-size="11.5">• Dual-signature gate: QA Lead step 1 -> Closure Authority step 2</text>
-  <text x="435" y="312" fill="#94a3b8" font-size="11">• 21 CFR § 7.49: >= 3 contact attempts + district office escalation</text>
+  <text x="435" y="312" fill="#94a3b8" font-size="11">• Modeled workflow: >= 3 documented contact attempts + internal referral note</text>
 
   <!-- Deterministic Reducer & Optimistic Concurrency -->
   <rect x="420" y="335" width="410" height="85" rx="6" fill="url(#gradBox)" stroke="#475569" stroke-width="1"/>
@@ -163,7 +163,7 @@ SVG_CONTENT = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" 
   <rect x="890" y="597" width="270" height="10" fill="#1e293b" />
   <text x="905" y="597" fill="#a855f7" font-size="12.5" font-weight="700">AUDITOR: Regulatory Bundle Export</text>
   <text x="905" y="628" fill="#f1f5f9" font-size="12" font-weight="600">Tamper-Evident Evidence Stream</text>
-  <text x="905" y="648" fill="#94a3b8" font-size="11.5">• 21 CFR § 7.49 Non-Response Certified</text>
+  <text x="905" y="648" fill="#94a3b8" font-size="11.5">• Synthetic Non-Response Documentation Recorded</text>
   <text x="905" y="666" fill="#94a3b8" font-size="11.5">• Verified SHA-256 Hash Chain Export</text>
 
   <!-- ==================== CONNECTORS ==================== -->

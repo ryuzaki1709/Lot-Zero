@@ -5,7 +5,6 @@ import pytest
 
 from lot_zero.fixtures.loader import FIXTURE_DIRECTORY, load_fixture
 
-
 INTEGRITY_FILE_NAMES = ("signal.json", "operations.json", "golden.json")
 
 
@@ -25,11 +24,16 @@ def test_fixture_is_fictional_deterministic_and_complete(fixture):
 
 
 def test_fixture_has_the_specified_operational_outcomes(fixture):
-    assert tuple((lot.lot_id, lot.quantity) for lot in fixture.operations.affected_finished_lots) == (
+    assert tuple(
+        (lot.lot_id, lot.quantity) for lot in fixture.operations.affected_finished_lots
+    ) == (
         ("FP-100-L240814-A", 120),
         ("FP-100-L240814-B", 80),
     )
-    assert tuple(lot.product_id for lot in fixture.operations.affected_finished_lots) == ("FP-100", "FP-100")
+    assert tuple(lot.product_id for lot in fixture.operations.affected_finished_lots) == (
+        "FP-100",
+        "FP-100",
+    )
     assert fixture.operations.adjacent_unaffected_batch.lot_id == "FP-100-ADJ"
     assert fixture.operations.adjacent_unaffected_batch.ingredient_lot == "ING-4418"
     assert fixture.operations.adjacent_unaffected_batch.quantity == 100
@@ -93,9 +97,10 @@ def test_loader_rejects_each_file_that_does_not_match_its_manifest_hash(
 @pytest.mark.parametrize("file_name", INTEGRITY_FILE_NAMES)
 def test_manifest_hashes_match_all_canonical_fixture_bytes(file_name):
     fixture = load_fixture("evaluation-tenant-v1")
-    assert fixture.manifest_hashes[file_name] == hashlib.sha256(
-        (FIXTURE_DIRECTORY / file_name).read_bytes()
-    ).hexdigest()
+    assert (
+        fixture.manifest_hashes[file_name]
+        == hashlib.sha256((FIXTURE_DIRECTORY / file_name).read_bytes()).hexdigest()
+    )
 
 
 @pytest.mark.parametrize("file_name", INTEGRITY_FILE_NAMES)

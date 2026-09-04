@@ -1,71 +1,110 @@
-# Lot Zero — 4-Minute Hackathon Video Walkthrough Script
+# Lot Zero — Demonstration Script for Evaluators & Video Recording
 
-**Total Duration**: 04:00  
-**Live Target**: `https://lot-zero-1051797806634.us-central1.run.app`  
-**Tone**: Confident, technical, authoritative, calm.
+This script provides step-by-step instructions for demonstrating **Lot Zero** in a live evaluation or video presentation.
 
 ---
 
-### Segment 1: The Problem & Architecture Overview (0:00 – 0:45)
-- **Visual**: Show the Architecture diagram ([`docs/architecture.png`](architecture.png)) and open the live Cloud Run URL in browser.
-- **Audio / Voiceover**:
-  > *"Welcome to Lot Zero. In regulated food manufacturing, a single contaminated ingredient can compromise thousands of consumer units. Current recall workflows rely on error-prone manual spreadsheets, hallucinating AI wrappers, or malleable audit trails.*
-  > 
-  > *Lot Zero is an industrial-grade incident workspace designed around two core principles: Grounded extraction via Gemini 3.5 on Google Vertex AI, paired with a deterministic, event-sourced authority kernel deployed on Google Cloud Run with persistent GCS FUSE storage and cryptographic SHA-256 audit chaining.*
-  > 
-  > *Let's walk through an active food contamination incident end-to-end."*
+## Part 1: Primary Demo Script (2–3 Minutes)
+
+### Step 0: Baseline Preparation
+- **Persona**: `Evaluation Administrator` (select in top right dropdown).
+- **Action**: Click **Reset State** -> Click **Reset Evaluation State** in modal.
+- **Verification**: Header displays `signal_received` phase, Units on hold: `0`, False holds: `0`, Ledger events: `0`.
+- **Narration**: *"We start with a clean evaluation baseline. Lot Zero is connected to an append-oriented event store."*
 
 ---
 
-### Segment 2: Grounded Extraction & Separation of Duties Refusal (0:45 – 1:45)
-- **Visual**: 
-  1. Role Selector in Header is set to **Recall Coordinator** (`key-coord-01`).
-  2. Click **"Simulate Safety Signal"**.
-  3. Show the raw Apex Laboratories Salmonella notice and the parsed Gemini 3.5 Flash citation spans highlighted with character-offset badges bound to the document's SHA-256 digest.
-  4. Show the Dynamic Genealogy DAG isolating raw lot `ING-4417`, quarantining 200 units across `FP-100-L240814-A` and `FP-100-L240814-B`, while keeping negative control `FP-100-ADJ` (made from `ING-4418`) clear.
-  5. Attempt to click **"Sign Off Firm Quarantine"** as the Recall Coordinator.
-  6. Show the red server denial toast: **Server Refusal (HTTP 403): requester and approver must be different people**.
-- **Audio / Voiceover**:
-  > *"We start as the Recall Coordinator. A third-party laboratory Salmonella notice arrives. Powered by Gemini 3.5 Flash on Vertex AI, Lot Zero extracts the contaminated lot ING-4417 and binds exact character-offset citation spans to the lab report's SHA-256 digest.*
-  > 
-  > *The genealogy DAG immediately isolates affected finished goods FP-100-L240814-A and B while unblocking clean control batch FP-100-ADJ. Notice what happens if the Recall Coordinator attempts to approve their own quarantine: the server rejects the request with HTTP 403: 'requester and approver must be different people'. In Lot Zero, Separation of Duties is server-enforced at the domain kernel level—no self-approvals allowed."*
+### Step 1: Lab Signal Ingestion & Grounding
+- **Persona**: Switch to `Recall Coordinator`.
+- **Action**: Click **Simulate Signal**.
+- **Verification**:
+  - Phase advances to `provisional_containment`.
+  - Signal Viewer highlights *Salmonella enterica serovar Typhimurium* and Lot `ING-4417` (Organic Wheat Flour) with green verbatim citation offset boxes and dynamic document hash verification.
+  - Units on hold displays `200` units across two finished batches (`FP-100-L240814-A`: 120 units, `FP-100-L240814-B`: 80 units).
+  - False holds displays `0` units (verifies adjacent clean control batch `FP-100-ADJ`, 100 units, is unquarantined in the synthetic fixture).
+  - Standing policy: `EVAL-HOLD-01 · provisional soft hold (30m)`.
+- **Narration**: *"An incoming Apex Micro Quality Labs unstructured text notice is parsed by Gemini 3.5 Flash. The agent extracts contaminated lot ING-4417 (Organic Wheat Flour) with exact character-offset citations. It immediately traverses the supply chain graph and places a 30-minute soft hold on 200 affected units across two finished batches (FP-100-L240814-A: 120 units and FP-100-L240814-B: 80 units), while the demonstrated synthetic scenario leaves adjacent clean control batch FP-100-ADJ (100 units) unheld (zero false holds in the synthetic evaluation fixture)."*
 
 ---
 
-### Segment 3: QA Sign-off & Customer Operations Outbox (1:45 – 2:45)
-- **Visual**:
-  1. Switch Role dropdown in Header to **QA Lead** (`key-qa-lead-01`).
-  2. Click **"Sign Off Firm Quarantine"** (shows green success and appends event to live ledger).
-  3. Switch Role to **Customer Operations** (`key-ops-01`).
-  4. Navigate to the Outbox panel; click **"Dispatch Consignee Notifications"**.
-  5. Show the real-time SSE stream updating consignee delivery statuses.
-- **Audio / Voiceover**:
-  > *"Now we switch to the QA Lead role. With authorized credentials, the QA Lead signs the quarantine, transitioning the incident into active containment.*
-  > 
-  > *Next, Customer Operations takes over to dispatch 21 CFR § 7.49 compliant recall notices to consignees. All updates stream reactively to connected browser cockpits using Server-Sent Events secured by 60-second ephemeral HMAC tokens minted by the backend."*
+### Step 2: QA Quarantine Approval Gate
+- **Persona**: Switch to `QA Lead`.
+- **Action**:
+  - Notice the **QA Approval Rationale** text box is enabled.
+  - Click **Approve Firm Quarantine (QA)**.
+- **Verification**:
+  - Phase advances to `action_review`.
+  - Standing policy upgrades to `AUTH-HOLD-01 · firm quarantine`.
+  - Signed approval badge `AUTH-HOLD-01` appears under Governance.
+- **Narration**: *"The agent cannot permanently quarantine product alone. The QA Lead reviews the evidence and signs off, upgrading the soft hold into authorized firm quarantine under policy AUTH-HOLD-01."*
 
 ---
 
-### Segment 4: Dual-Signature Release, Cryptographic Export & Cloud Run Proof (2:45 – 4:00)
-- **Visual**:
-  - **[2:45 – 3:15] Dual-Signature Release Rail**:
-    1. Switch Role to **QA Lead**; enter certified negative re-test lab document hash; complete **Step 1: Biological Clearance**.
-    2. Show Step 2 remaining locked until **Closure Authority** (`key-closure-auth-01`) provides **Step 2: Operational Release Authorization**.
-    3. Complete Step 2 (noting optional non-response escalation closure capabilities).
-  - **[3:15 – 3:35] Cryptographic Audit Export & CLI Verification**:
-    1. Navigate to the **Evidence Ledger**; click **"Download Cryptographic Audit Bundle"**.
-    2. Show terminal executing `python scripts/verify_cloud_deploy.py https://lot-zero-1051797806634.us-central1.run.app` with 100% verified SHA-256 hash chain and 11 immutable events.
-  - **[3:35 – 3:50] Google Cloud Console & Live Vertex AI Logs Proof**:
-    1. Switch screen to the **Google Cloud Run Console** showing service `lot-zero` (region `us-central1`, persistent GCS FUSE volume mount `gs://lot-zero-events-project-b2c3348e-d718-4255-be2`).
-    2. Highlight the genuine Cloud Logging execution line:  
-       `[Gemini Agent] Successfully executed live on Vertex AI (location=global, model=gemini-3.5-flash)`
-  - **[3:50 – 4:00] Closing Wrap-up**:
-    1. Show the Lot Zero dashboard with all green gates.
-- **Audio / Voiceover**:
-  > *"To release a hold, Lot Zero enforces a statutory 2-Step Dual-Signature Rail: Step 1 requires the QA Lead's biological clearance bound to a certified negative re-test hash. Step 2 requires the Closure Authority's operational release.*
-  > 
-  > *When regulatory auditors arrive, we export a self-verifying JSON audit bundle where every event is cryptographically chained to its predecessor with a top-level SHA-256 root digest.*
-  > 
-  > *Here in the Google Cloud Console, we see our Cloud Run deployment backed by persistent Cloud Storage FUSE and our live Cloud Logging telemetry confirming genuine, live execution against Gemini 3.5 Flash on Vertex AI.*
-  > 
-  > *All 119 tests passing. That is Lot Zero: deterministic, evidence-backed recall management."*
+### Step 3: Outbound Consignee Notice Drafting & Approval
+- **Persona**: Switch to `Recall Coordinator`.
+- **Action**: Click **Request Notification Packet (Coord)**.
+- **Verification**: Button updates to `Packet PKT-001 Requested`.
+- **Persona**: Switch to `Customer Operations`.
+- **Action**: Click **Approve Notification Packet (Ops)**.
+- **Verification**: Button updates to `Notification Approved (Ops)`.
+- **Narration**: *"Separation of duties in action: the Recall Coordinator requests the formal recall notice packet, and Customer Operations reviews and authorizes the outbound consignment payload."*
+
+---
+
+### Step 4: Outbox Dispatch & Blocked Closure Demonstration
+- **Persona**: Stay on `Customer Operations`.
+- **Action**: Click **Dispatch Recall Outbox (Ops)**.
+- **Verification**:
+  - Phase advances to `ack_monitoring`.
+  - Outreach table displays consignees: `ACK-001`, `ACK-002`, `ACK-003`, `ACK-004`, `ACK-005` verified, but `ACK-006` is **Unverified**.
+- **Persona**: Switch to `Recall Coordinator`.
+- **Action**: Click **Request Incident Closure (Coord)**.
+- **Verification**:
+  - Closure Gate alert banner displays: *Awaiting verified consignment acknowledgement from: ACK-006*.
+  - Closure Authority button is disabled / blocked.
+- **Narration**: *"Recall notices are dispatched. But distributor ACK-006 has not acknowledged receipt. If we attempt to close the incident, the system strictly refuses. This is authentic workflow modeling inspired by FDA recall-effectiveness practices."*
+
+---
+
+### Step 5: Consignee Phone Attestation & Final Closure
+- **Persona**: Switch to `Customer Operations`.
+- **Action**:
+  - In the Outreach table next to `ACK-006`, click **Log Phone Attestation**.
+  - Review pre-filled oral attestation details (Contact: David Miller, Note: 'All units dock quarantined').
+  - Click **Submit Attestation**.
+- **Verification**:
+  - Phase advances to `effectiveness_check`.
+  - All 6/6 consignees are marked **Verified**.
+  - Closure gate changes to green: *All 6/6 Consignees Verified*.
+- **Persona**: Switch to `Closure Authority`.
+- **Action**: Click **Authorize Final Closure (Auth)**.
+- **Verification**:
+  - Phase advances to `closed`.
+  - Units on hold returns to `0`.
+  - Evidence Ledger displays: *Incident disposition complete — recorded in the tamper-evident audit stream (not a legal or regulatory certification)*.
+- **Narration**: *"Customer Operations logs a phone attestation from the distributor. With all consignees verified, the Closure Authority signs the final closure command, moving the incident to closed status."*
+
+---
+
+### Step 6: Self-Verifying Audit Export
+- **Action**: Click **Export Audit Bundle** in the top navigation bar.
+- **Verification**: A JSON file `lot_zero_audit_EVAL-CASE-01.json` is downloaded containing all hash-chained events with `prior_entry_hash` and top-level `root_digest`.
+- **Narration**: *"Every single decision, approval, and state transition was recorded to an append-oriented event store with a SHA-256 cryptographic hash chain. The verifier detects post-export payload changes, reordering, or record removal when checked against the originally retained root digest."*
+
+---
+
+## Part 2: Fast 60-Second Fallback Script
+
+1. **Start at Reset** (`Eval Admin`): Click **Reset State** (0s–5s).
+2. **Ingest Signal** (`Recall Coord`): Click **Simulate Signal** -> Highlight Gemini character-exact citation and 0 false holds (5s–20s).
+3. **QA Approval** (`QA Lead`): Click **Approve Firm Quarantine** (20s–30s).
+4. **Notice & Dispatch** (`Recall Coord` -> `Customer Ops`): Click **Request Packet** -> Click **Approve Packet** -> Click **Dispatch Outbox** (30s–45s).
+5. **Resolve & Close** (`Customer Ops` -> `Closure Auth`): Click **Log Phone Attestation** on `ACK-006` -> Click **Authorize Final Closure** -> Highlight case closed state (45s–60s).
+
+---
+
+## Part 3: Troubleshooting & Recovery
+
+- **If a button is disabled**: Check the top-right persona selector. Ensure the active persona matches the required role indicated in the button label / tooltip.
+- **If the network disconnects**: Check the SSE indicator in the top bar. If it shows "Offline", click **Refresh** on the Incident card or reload the page.
+- **To restart the demo from scratch**: Switch to `Evaluation Administrator` and click **Reset State**.

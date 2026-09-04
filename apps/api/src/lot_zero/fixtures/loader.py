@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
+import json
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from hashlib import sha256
-import json
 from pathlib import Path
-from typing import Literal, Mapping
-
+from typing import Literal
 
 FIXTURE_VERSION = "evaluation-tenant-v1"
 FIXTURE_DIRECTORY = Path(__file__).resolve().parents[5] / "fixtures" / FIXTURE_VERSION
@@ -137,8 +137,12 @@ def _string_tuple(data: Mapping[str, object], key: str) -> tuple[str, ...]:
     return tuple(values)
 
 
-def _load_verified_documents() -> tuple[dict[str, object], dict[str, object], dict[str, object], dict[str, str]]:
-    manifest = _object(json.loads(_read_canonical_bytes(FIXTURE_DIRECTORY / "manifest.json")), "manifest")
+def _load_verified_documents() -> tuple[
+    dict[str, object], dict[str, object], dict[str, object], dict[str, str]
+]:
+    manifest = _object(
+        json.loads(_read_canonical_bytes(FIXTURE_DIRECTORY / "manifest.json")), "manifest"
+    )
     if _string(manifest, "fixture_version") != FIXTURE_VERSION:
         raise ValueError("Fixture manifest version does not match requested fixture")
     file_hashes = _object(manifest.get("files"), "manifest.files")
@@ -179,7 +183,9 @@ def load_fixture(version: Literal["evaluation-tenant-v1"]) -> EvaluationFixture:
         )
         for item in _items(operations_data.get("affected_finished_lots"), "affected_finished_lots")
     )
-    adjacent_data = _object(operations_data.get("adjacent_unaffected_batch"), "adjacent_unaffected_batch")
+    adjacent_data = _object(
+        operations_data.get("adjacent_unaffected_batch"), "adjacent_unaffected_batch"
+    )
     adjacent_batch = AdjacentBatch(
         lot_id=_string(adjacent_data, "lot_id"),
         product_id=_string(adjacent_data, "product_id"),
@@ -224,9 +230,13 @@ def load_fixture(version: Literal["evaluation-tenant-v1"]) -> EvaluationFixture:
         affected_shipped_quantity=_integer(golden_data, "affected_shipped_quantity"),
         provisional_hold_quantity=_integer(golden_data, "provisional_hold_quantity"),
         unaffected_hold_quantity=_integer(golden_data, "unaffected_hold_quantity"),
-        outstanding_acknowledgement_ids=_string_tuple(golden_data, "outstanding_acknowledgement_ids"),
+        outstanding_acknowledgement_ids=_string_tuple(
+            golden_data, "outstanding_acknowledgement_ids"
+        ),
         unresolved_genealogy_edge_ids=_string_tuple(golden_data, "unresolved_genealogy_edge_ids"),
-        affected_operational_record_ids=_string_tuple(golden_data, "affected_operational_record_ids"),
+        affected_operational_record_ids=_string_tuple(
+            golden_data, "affected_operational_record_ids"
+        ),
     )
     return EvaluationFixture(
         version=FIXTURE_VERSION,

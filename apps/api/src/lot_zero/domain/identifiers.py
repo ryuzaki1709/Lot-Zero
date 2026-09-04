@@ -16,12 +16,7 @@ from .models import DomainRecord, Identifier, NonNegativeQuantity, NonNegativeVe
 
 type JsonScalar = None | bool | int | float | str
 type JsonValue = (
-    JsonScalar
-    | Decimal
-    | datetime
-    | BaseModel
-    | Sequence[JsonValue]
-    | Mapping[str, JsonValue]
+    JsonScalar | Decimal | datetime | BaseModel | Sequence[JsonValue] | Mapping[str, JsonValue]
 )
 
 
@@ -83,7 +78,7 @@ def _canonical_datetime(value: datetime) -> dict[str, str]:
     return {"$lot_zero_type": "datetime", "value": rendered}
 
 
-def _canonicalize(value: JsonValue) -> object:
+def _canonicalize(value: object) -> object:
     if isinstance(value, BaseModel):
         return _canonicalize(value.model_dump(mode="python"))
     if isinstance(value, Decimal):
@@ -108,7 +103,7 @@ def _canonicalize(value: JsonValue) -> object:
     raise TypeError(f"unsupported canonical JSON value: {type(value).__name__}")
 
 
-def canonical_sha256(value: JsonValue) -> str:
+def canonical_sha256(value: object) -> str:
     """Return the SHA-256 of typed, sorted, compact UTF-8 canonical JSON."""
 
     canonical_json = json.dumps(

@@ -126,6 +126,13 @@ def _advance(state: IncidentState, event: TransitionEvent) -> IncidentState:
 def _enter_recovery(state: IncidentState, event: TransitionEvent) -> IncidentState:
     if state.recovery is not None:
         raise ValueError("incident is already in recovery")
+    if (
+        event.recovery_status is None
+        or event.reason_record_ids is None
+        or event.parent_phase is None
+        or event.return_phase is None
+    ):
+        raise ValueError("recovery entry requires status, phases, and reason records")
     if event.parent_phase != state.case.phase or event.return_phase != state.case.phase:
         raise ValueError("recovery must return to its current parent phase")
     recovery = RecoveryState(
@@ -136,6 +143,7 @@ def _enter_recovery(state: IncidentState, event: TransitionEvent) -> IncidentSta
         retry_attempt=event.retry_attempt,
         retry_limit=event.retry_limit,
     )
+
     updated_case = state.case.model_copy(
         update={"case_version": state.case.case_version + 1, "updated_at": event.occurred_at}
     )

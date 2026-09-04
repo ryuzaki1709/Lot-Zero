@@ -30,9 +30,7 @@ class ScopePredicate(DomainRecord):
             if self.start_date > self.end_date:
                 raise ValueError("produced_on start_date must not be after end_date")
         elif (
-            self.expected_value is None
-            or self.start_date is not None
-            or self.end_date is not None
+            self.expected_value is None or self.start_date is not None or self.end_date is not None
         ):
             raise ValueError(f"{self.kind} predicates require only expected_value")
         return self

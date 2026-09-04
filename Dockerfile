@@ -24,13 +24,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy API application source & install dependencies
+# Copy constraints & API application source & install dependencies
+COPY constraints.txt /app/constraints.txt
 COPY apps/api /app/apps/api
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -e /app/apps/api
+    pip install --no-cache-dir -c /app/constraints.txt -e /app/apps/api
+
 
 # Copy built frontend assets to static mount location
 COPY --from=frontend-builder /app/web/dist /app/apps/web/dist
+
+# Copy evaluation fixtures
+COPY fixtures /app/fixtures
 
 # Create storage volume mount directory for Cloud Storage (gcsfuse)
 RUN mkdir -p /app/data

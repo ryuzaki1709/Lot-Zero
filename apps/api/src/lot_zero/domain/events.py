@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from decimal import Decimal
 from typing import Annotated, Literal
 
 from pydantic import Field, TypeAdapter
@@ -33,8 +32,10 @@ class ScopeProposedEvent(EventRecord):
     scope_id: Identifier
     scope_version: NonNegativeVersion
     affected_record_ids: tuple[Identifier, ...] = ()
-    affected_quantity: NonNegativeQuantity = Decimal("0")
+    affected_quantity: NonNegativeQuantity
     evidence_record_ids: Annotated[tuple[Identifier, ...], Field(min_length=1)]
+    ingredient_lot: Identifier | None = None
+    pathogen: str | None = None
 
 
 class ContainmentRequestedEvent(EventRecord):
@@ -44,6 +45,7 @@ class ContainmentRequestedEvent(EventRecord):
     action_id: Identifier
     policy_version: Identifier
     target_record_ids: Annotated[tuple[Identifier, ...], Field(min_length=1)]
+    quantity: NonNegativeQuantity
 
 
 class NotificationRequestedEvent(EventRecord):
@@ -52,7 +54,9 @@ class NotificationRequestedEvent(EventRecord):
     scope_version: NonNegativeVersion
     packet_id: Identifier
     payload_version: Identifier
+    payload_hash: Identifier
     policy_version: Identifier
+    recipient_ids: Annotated[tuple[Identifier, ...], Field(min_length=1)]
 
 
 class AcknowledgementRecordedEvent(EventRecord):
@@ -71,9 +75,15 @@ class AcknowledgementRecordedEvent(EventRecord):
 
 class ClosureRequestedEvent(EventRecord):
     kind: Literal["closure_requested"] = "closure_requested"
+    request_id: Identifier
+    requester_principal_id: Identifier
+    requested_scope_version: NonNegativeVersion = 0
+    requested_policy_version: Identifier = "EVAL-CLOSE-01"
     closure_id: Identifier
     policy_version: Identifier
     outstanding_acknowledgement_ids: tuple[Identifier, ...] = ()
+    evidence_record_ids: tuple[Identifier, ...] = ()
+    request_stream_version: NonNegativeVersion
 
 
 class ContainmentAttemptedEvent(EventRecord):
@@ -105,4 +115,4 @@ type EventValue = Annotated[
     | ApprovalDecision,
     Field(discriminator="kind"),
 ]
-Event = TypeAdapter(EventValue)
+Event: TypeAdapter[EventValue] = TypeAdapter(EventValue)

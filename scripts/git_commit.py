@@ -22,6 +22,7 @@ IGNORED_DIRS = {
     ".turbo",
     ".next",
     ".vite",
+    "screenshots",
 }
 
 IGNORED_EXTENSIONS = {
@@ -92,4 +93,6 @@ def commit_all(message: str):
 
 
 if __name__ == "__main__":
-    commit_all("feat: Complete Lot Zero with SQLite event store, API key auth, read models, audit export, and dashboard")
+    import sys
+    msg = sys.argv[1] if len(sys.argv) > 1 else "feat: Complete Lot Zero with SQLite event store, API key auth, read models, audit export, and dashboard"
+    commit_all(msg)

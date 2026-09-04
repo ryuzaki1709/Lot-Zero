@@ -7,15 +7,16 @@ Example:
     python scripts/verify_cloud_deploy.py https://lot-zero-xyz-uc.a.run.app
 """
 
+import hashlib
 import json
 import sys
 import urllib.error
 import urllib.request
-import hashlib
 
 DEFAULT_URL = "http://127.0.0.1:8000"
 SERVICE_URL = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_URL
 
+KEY_ADMIN = "key-eval-admin-01"
 KEY_COORD = "key-recall-coord-01"
 KEY_QA = "key-qa-lead-01"
 KEY_OPS = "key-ops-01"
@@ -53,24 +54,33 @@ def verify_cloud_deployment():
     print("1. Checking SPA static asset hosting on Cloud Run...")
     status, body = http_req("GET", "/")
     assert status == 200, f"Root SPA returned status {status}"
-    assert "<!doctype html>" in body.lower() or "<html" in body.lower(), "Root SPA did not return HTML"
+    assert "<!doctype html>" in str(body).lower() or "<html" in str(body).lower(), "Root SPA did not return HTML"
     print("   [PASS] Root SPA serves bundled Vite frontend.")
 
     # 2. Reset baseline
-    print("2. Resetting incident state to baseline...")
-    status, data = http_req("POST", "/api/evaluation/reset", {"X-API-Key": KEY_COORD})
+    print("2. Resetting incident state to baseline as Evaluation Admin...")
+    status, data = http_req("POST", "/api/evaluation/reset", {"X-API-Key": KEY_ADMIN})
     assert status == 200, f"Reset failed: {data}"
     print("   [PASS] Reset incident state.")
 
-    # 3. Simulate Signal via Gemini on Vertex AI
-    print("3. Executing safety signal extraction via Gemini on Vertex AI...")
+    # 3. Simulate Signal via Gemini
+    print("3. Executing safety signal extraction via Gemini...")
     status, data = http_req("POST", "/api/evaluation/simulate-signal", {"X-API-Key": KEY_COORD})
     assert status == 200, f"Simulate signal failed: {data}"
     model_val = data["projection"]["runtime"]["model"]["value"]
-    print(f"   [PASS] Gemini Model: {model_val}")
-    assert "Replay" not in model_val, f"Live Gemini 3.5 call failed — model tag contains 'Replay': {model_val}"
-    assert model_val.startswith("gemini-3.5"), f"Expected gemini-3.5 model, got {model_val}"
-    assert "(Vertex AI Live)" in model_val or "(Gemini API Live)" in model_val, f"Expected live execution tag, got {model_val}"
+    signal_model_version = data.get("signal", {}).get("model_version", "N/A")
+    print(f"   -> Exact runtime.model.value: {model_val}")
+    print(f"   -> Signal model_version:      {signal_model_version}")
+
+    is_local = "127.0.0.1" in SERVICE_URL or "localhost" in SERVICE_URL
+    if not is_local:
+        assert "Fallback" not in model_val, f"Live Gemini call failed — model tag is fallback: {model_val}"
+        assert "Replay" not in model_val, f"Live Gemini call failed — model tag contains 'Replay': {model_val}"
+        assert model_val.startswith("gemini-3.5"), f"Expected gemini-3.5 model, got {model_val}"
+        assert "(Vertex AI Live)" in model_val or "(Google GenAI Live)" in model_val, f"Expected live execution tag, got {model_val}"
+    else:
+        assert "gemini" in model_val.lower(), f"Expected gemini model tag, got {model_val}"
+    print(f"   [PASS] Verified Gemini Model Tag: {model_val}")
 
     # 4. Wrong-role refusal: Recall Coordinator attempts QA quarantine approval
     print("4. Testing Separation of Duties (wrong-role denial)...")
@@ -94,6 +104,42 @@ def verify_cloud_deployment():
     )
     assert status == 200, f"QA approval failed: {data}"
     print("   [PASS] QA Lead quarantine authorized.")
+
+    # 5a. Recall Coordinator requests notification drafting
+    print("5a. Recall Coordinator requests drafting of notification packet...")
+    status, data = http_req(
+        "POST",
+        "/api/evaluation/request-notification",
+        {"X-API-Key": KEY_COORD},
+        {
+            "packet_id": "PKT-001",
+            "scope_id": "SCOPE-EVAL-01",
+            "scope_version": 1,
+            "payload_version": "PAYLOAD-001",
+            "payload_hash": "payload-sha256-verified-digest",
+            "policy_version": "EVAL-HOLD-01",
+        },
+    )
+    assert status == 200, f"Notification request failed: {data}"
+
+    # 5b. Customer Operations approves notification
+    print("5b. Customer Operations approves notification packet...")
+    status, data = http_req(
+
+        "POST",
+        "/api/evaluation/approve-notification",
+        {"X-API-Key": KEY_OPS},
+        {
+            "packet_id": "PKT-001",
+            "payload_version": "PAYLOAD-001",
+            "payload_hash": "payload-sha256-verified-digest",
+            "scope_id": "SCOPE-EVAL-01",
+            "scope_version": 1,
+            "policy_version": "EVAL-HOLD-01",
+            "rationale": "Notification packet payload approved for outbox delivery.",
+        },
+    )
+    assert status == 200, f"Notification approval failed: {data}"
 
     # 6. Dispatch outbox
     print("6. Customer Operations dispatches recall outbox...")

@@ -6,6 +6,7 @@ import urllib.request
 
 API_BASE = "http://127.0.0.1:8000"
 
+KEY_ADMIN = "key-eval-admin-01"
 KEY_COORD = "key-recall-coord-01"
 KEY_QA = "key-qa-lead-01"
 KEY_OPS = "key-ops-01"
@@ -31,18 +32,22 @@ def http_req(method, path, headers=None, body=None):
 
 
 def test_acceptance_flow():
-    print("1. Resetting incident baseline...")
+    print("1. Testing Reset Authority: Non-admin Coordinator is denied...")
     status, data = http_req("POST", "/api/evaluation/reset", {"X-API-Key": KEY_COORD})
+    assert status == 403, f"Expected 403 for non-admin reset, got {status}"
+
+    print("1b. Resetting incident baseline as Evaluation Administrator...")
+    status, data = http_req("POST", "/api/evaluation/reset", {"X-API-Key": KEY_ADMIN})
     assert status == 200, f"Reset failed: {data}"
 
-    print("2. Simulating signal as Recall Coordinator (Gemini 3.5+ extraction)...")
+    print("2. Simulating signal as Recall Coordinator (grounded extraction)...")
     status, data = http_req("POST", "/api/evaluation/simulate-signal", {"X-API-Key": KEY_COORD})
     assert status == 200, f"Signal failed: {data}"
     proj = data["projection"]
     assert proj["metrics"]["provisional_hold_quantity"] == 200.0
     model_val = proj["runtime"]["model"]["value"]
     print(f"   -> Runtime Model: {model_val}")
-    assert "gemini" in model_val, f"Expected gemini model tag, got {model_val}"
+    assert "gemini" in model_val.lower(), f"Expected gemini model tag, got {model_val}"
 
     print("3. Testing Role Rejection: Recall Coordinator attempts to Approve Firm Quarantine...")
     status, data = http_req(
@@ -53,7 +58,8 @@ def test_acceptance_flow():
     )
     print(f"   -> Status code: {status}, Detail: {data.get('detail')}")
     assert status == 403, f"Expected 403, got {status}"
-    assert any(w in data.get("detail", "").lower() for w in ["lacks", "role", "requester", "approver", "conflict"])
+    assert any(w in data.get("detail", "").lower() for w in ["lacks", "role", "forbidden", "requester", "different", "separation"])
+
 
     print("4. Valid QA Approval: QA Lead approves firm quarantine...")
     status, data = http_req(
@@ -63,6 +69,40 @@ def test_acceptance_flow():
         {"rationale": "Lab verified Salmonella in Lot ING-4417"},
     )
     assert status == 200, f"QA approval failed: {data}"
+
+    print("4a. Recall Coordinator requests drafting of notification packet...")
+    status, data = http_req(
+        "POST",
+        "/api/evaluation/request-notification",
+        {"X-API-Key": KEY_COORD},
+        {
+            "packet_id": "PKT-001",
+            "scope_id": "SCOPE-EVAL-01",
+            "scope_version": 1,
+            "payload_version": "PAYLOAD-001",
+            "payload_hash": "payload-sha256-verified-digest",
+            "policy_version": "EVAL-HOLD-01",
+        },
+    )
+    assert status == 200, f"Notification request failed: {data}"
+
+    print("4b. Customer Operations approves notification packet...")
+    status, data = http_req(
+        "POST",
+        "/api/evaluation/approve-notification",
+        {"X-API-Key": KEY_OPS},
+
+        {
+            "packet_id": "PKT-001",
+            "payload_version": "PAYLOAD-001",
+            "payload_hash": "payload-sha256-verified-digest",
+            "scope_id": "SCOPE-EVAL-01",
+            "scope_version": 1,
+            "policy_version": "EVAL-HOLD-01",
+            "rationale": "Notification packet payload approved for outbox delivery.",
+        },
+    )
+    assert status == 200, f"Notification approval failed: {data}"
 
     print("5. Dispatch Outbox: Customer Operations dispatches notice...")
     status, data = http_req("POST", "/api/evaluation/dispatch-outbox", {"X-API-Key": KEY_OPS})
@@ -111,8 +151,8 @@ def test_acceptance_flow():
     proj_final = data["projection"]
     assert any(a["action_type"] == "release_hold" for a in proj_final["containment_actions"])
 
-    print("9. Non-Response Attempt Count Verbatim Pass-through Test...")
-    http_req("POST", "/api/evaluation/reset", {"X-API-Key": KEY_COORD})
+    print("9. Non-Response Attempt Count & Prior Request Verification...")
+    http_req("POST", "/api/evaluation/reset", {"X-API-Key": KEY_ADMIN})
     http_req("POST", "/api/evaluation/simulate-signal", {"X-API-Key": KEY_COORD})
     http_req(
         "POST",
@@ -120,13 +160,34 @@ def test_acceptance_flow():
         {"X-API-Key": KEY_QA},
         {"rationale": "Quarantine approved."},
     )
+    http_req(
+        "POST",
+        "/api/evaluation/approve-notification",
+        {"X-API-Key": KEY_OPS},
+        {
+            "packet_id": "PKT-001",
+            "payload_version": "PAYLOAD-001",
+            "payload_hash": "payload-sha256-verified-digest",
+            "scope_id": "SCOPE-EVAL-01",
+            "scope_version": 1,
+            "policy_version": "EVAL-HOLD-01",
+            "rationale": "Payload verified.",
+        },
+    )
     http_req("POST", "/api/evaluation/dispatch-outbox", {"X-API-Key": KEY_OPS})
 
+    # Coordinator requests closure review
+    status_req, req_data = http_req("POST", "/api/evaluation/request-closure", {"X-API-Key": KEY_COORD})
+    assert status_req == 200, f"Closure request failed: {req_data}"
+    req_id = req_data["request_id"]
+
+    # Closure Authority authorizes non-response closure
     status, data = http_req(
         "POST",
         "/api/evaluation/close-with-non-response",
         {"X-API-Key": KEY_CLOSURE},
         {
+            "request_id": req_id,
             "attempt_count": 5,
             "regulatory_filing_id": "FDA-SAN-2026-NR-CUSTOM-005",
             "good_faith_notes": "Five certified contact attempts executed. Consignee non-responsive.",

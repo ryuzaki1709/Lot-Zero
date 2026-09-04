@@ -64,18 +64,20 @@ export function StageProgress({ phase, metrics, closureGate }) {
   ];
 
   return (
-    <div className="stepper">
-      {stages.map((s) => (
-        <div
-          key={s.id}
-          className={`step ${s.isDone ? 'step-done' : ''} ${
-            s.isActive ? (s.isWarning ? 'step-warning' : 'step-active') : ''
-          }`}
-        >
-          <div className="step-name">{s.name}</div>
-          <div className="step-desc">{s.desc}</div>
-        </div>
-      ))}
+    <div className="stepper-container">
+      <div className="stepper">
+        {stages.map((s) => (
+          <div
+            key={s.id}
+            className={`step ${s.isDone ? 'step-done' : ''} ${
+              s.isActive ? (s.isWarning ? 'step-warning' : 'step-active') : ''
+            }`}
+          >
+            <div className="step-name">{s.name}</div>
+            <div className="step-desc">{s.desc}</div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
