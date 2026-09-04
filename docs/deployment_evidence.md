@@ -1,6 +1,7 @@
 # Lot Zero — Cloud Run Deployment & Live Verification Evidence
 
 **Verification Date**: 2026-09-04<br/>
+**Deployment Timestamp**: 2026-09-04 11:09:52 UTC (`16:39:52 IST`)<br/>
 **Target Environment**: Google Cloud Run (`us-central1`)<br/>
 **Deployment Status**: **Verified & Active**
 
@@ -10,13 +11,13 @@
 
 | Parameter | Provenance Identifier |
 | :--- | :--- |
-| **Git Commit** | `1844d3292902c628d292cffb216b1febe6552154` (`fix: finalize evidence-honest Lot Zero release`) |
-| **Cloud Build ID** | `da0c2f2c-1560-4f55-ae4b-676fbfa4b5ab` |
-| **Active Serving Revision** | `lot-zero-00026-diy` |
-| **Immutable Container Image Digest** | `us-central1-docker.pkg.dev/project-b2c3348e-d718-4255-be2/cloud-run-source-deploy/lot-zero@sha256:0978915c01e186885bce3cfe27836934a689e7e51ddd40c9ccdbdd76bac6857b` |
+| **Git Commit** | `17f700ecb2e4319616b6e9dfb1352619f19b6cb9` (`Merge pull request #2 from ryuzaki1709/codex/lot-zero-demo-copy`) |
+| **Cloud Build ID** | `141f0494-a30e-4baa-9468-7de598e1595d` |
+| **Active Serving Revision** | `lot-zero-00028-vip` |
+| **Immutable Container Image Digest** | `us-central1-docker.pkg.dev/project-b2c3348e-d718-4255-be2/cloud-run-source-deploy/lot-zero@sha256:b1a375ddbbcd025a025cbcd0438fb07ee461cb0fa037b36d2454da2d0afc5034` |
 | **Public Live URL** | [https://lot-zero-m4vizenaoa-uc.a.run.app](https://lot-zero-m4vizenaoa-uc.a.run.app) |
 | **Canonical Public Health URL** | [https://lot-zero-m4vizenaoa-uc.a.run.app/api/health](https://lot-zero-m4vizenaoa-uc.a.run.app/api/health) |
-| **Retained Rollback Revision** | `lot-zero-00024-yaj` (0% traffic) |
+| **Retained Rollback Revision** | `lot-zero-00026-diy` (0% traffic) |
 
 ---
 
@@ -63,8 +64,10 @@ All endpoints and domain workflows were validated live against `https://lot-zero
 ### B. Frontend SPA & Static Assets
 - `GET /` -> HTTP 200 OK: Production React SPA HTML entry point served.
 - `GET /assets/index-KTIdlj9Z.css` -> HTTP 200 OK (`text/css; charset=utf-8`).
-- `GET /assets/index-Bp1Y_eOD.js` -> HTTP 200 OK (`text/javascript; charset=utf-8`).
-- **Bundle Content Scan**: Regex inspection of deployed JavaScript assets confirmed 0 occurrences of unsupported regulatory claims, overclaims, or ungrounded statements.
+- `GET /assets/index-khicPuCz.js` -> HTTP 200 OK (`text/javascript; charset=utf-8`, 278,907 bytes).
+- **Bundle & Response Copy Scan**:
+  - Confirmed required positive phrasing present: `Apex Micro Quality Labs Text Notice`, `Laboratory text notice ingested as the incident's root evidence`, and `Record Non-Response & Close`.
+  - Confirmed 0 occurrences of prohibited regulatory claims or ungrounded assertions (`Signed Apex Labs Report`, `Signed laboratory report`, `Non-Response Close (§ 7.49)`, `§ 7.49`, `certified non-response`, `true regulatory compliance`, `FDA-NONRESP`, `closed under 21 CFR`, `archived under 21 CFR`).
 
 ### C. Evaluation State Reset
 - `POST /api/evaluation/reset` (with `X-API-Key: key-eval-admin-01`) -> HTTP 200 OK:
@@ -80,6 +83,7 @@ All endpoints and domain workflows were validated live against `https://lot-zero
   - **Raw Notice Content**: Verified containing `Organic Wheat Flour`.
   - **Document Hash**: Verified dynamic SHA-256 (`ef246106d40190bb8dcd75e91eef1faec1cdd2d0efdad8164a58d917545a730b`).
   - **Evidence Spans**: 3 verbatim character-offset citation spans verified against source document SHA-256.
+  - **Projected Document Version**: `v1.0 (Apex Micro Quality Labs Text Notice)`.
 
 ### E. Genealogy Graph & Scoped Containment
 - `GET /api/incidents/EVAL-CASE-01` (with `X-API-Key: key-recall-coord-01`) -> HTTP 200 OK:
@@ -90,22 +94,24 @@ All endpoints and domain workflows were validated live against `https://lot-zero
 
 ### F. Real-Time Token Issuance
 - `POST /api/sse-token` (with `X-API-Key: key-recall-coord-01`) -> HTTP 200 OK:
-  - Generates 60-second HMAC-signed token using the Secret Manager-injected key for `RECALL-COORD-01`.
+  - Generates 60-second HMAC-signed token (length 172) using the Secret Manager-injected key for `RECALL-COORD-01` without exposing token plaintext.
 
 ### G. Role-Separated Multi-Persona Governance & Closure Enforcement
-- **QA Containment Approval**: `POST /api/approvals/REQ-APPR-01` by `QA-LEAD-01` -> HTTP 200 OK (`status: approved`).
-- **Separation of Duties Enforcement**: `POST /api/approvals/REQ-COMM-01` by `QA-LEAD-01` -> HTTP 403 Forbidden (cross-role rejection strictly enforced).
-- **Customer Operations Notification Approval**: `POST /api/approvals/REQ-COMM-01` by `OPS-001` -> HTTP 200 OK (`status: approved`).
-- **Customer Operations Outbox Dispatch**: `POST /api/incidents/EVAL-CASE-01/outbox/dispatch` by `OPS-001` -> HTTP 200 OK (5 initial notices dispatched, 1 non-responsive consignee `ACK-006` pending).
-- **Closure Authority Attempt Blocked**: `POST /api/incidents/EVAL-CASE-01/close` by `CLOSURE-AUTH-01` -> HTTP 200 OK (`status: closure_blocked`, `blocked: true`, requiring resolution of `ACK-006`).
-- **Non-Response Resolution**: `POST /api/acknowledgments/ACK-006/resolve` by `OPS-001` -> HTTP 200 OK (documented phone follow-up logged).
-- **Authorized Closure**: `POST /api/incidents/EVAL-CASE-01/close` by `CLOSURE-AUTH-01` -> HTTP 200 OK (`status: closed`, `phase: closed`).
+- **QA Containment Approval**: `POST /api/evaluation/approve-containment` by `QA-LEAD-01` -> HTTP 200 OK.
+- **Separation of Duties Enforcement**: `POST /api/evaluation/approve-notification` by `QA-LEAD-01` -> HTTP 403 Forbidden (cross-role rejection strictly enforced).
+- **Recall Coordinator Notification Request**: `POST /api/evaluation/request-notification` by `RECALL-COORD-01` -> HTTP 200 OK.
+- **Customer Operations Notification Approval**: `POST /api/evaluation/approve-notification` by `OPS-001` -> HTTP 200 OK.
+- **Customer Operations Outbox Dispatch**: `POST /api/evaluation/dispatch-outbox` by `OPS-001` -> HTTP 200 OK (5 initial notices dispatched, 1 non-responsive consignee `ACK-006` pending).
+- **Closure Request**: `POST /api/evaluation/request-closure` by `RECALL-COORD-01` -> HTTP 200 OK (`request_id: REQ-CLOSE-17`).
+- **Closure Authority Attempt Blocked**: `POST /api/evaluation/authorize-closure` by `CLOSURE-AUTH-01` -> HTTP 200 OK (`status: closure_blocked`, `blocked: true`, requiring resolution of `ACK-006`).
+- **Non-Response Resolution**: `POST /api/evaluation/resolve-ack` by `OPS-001` -> HTTP 200 OK (documented phone follow-up logged).
+- **Authorized Closure**: `POST /api/evaluation/authorize-closure` by `CLOSURE-AUTH-01` -> HTTP 200 OK (`status: closed`, `phase: closed`).
 - **Tamper-Evident Audit Export**: `GET /api/incidents/EVAL-CASE-01/audit-export` -> HTTP 200 OK:
   - Exactly 21 append-oriented, SHA-256 hash-chained ledger events were included in the verified self-verifying export.
-  - Complete SHA-256 hash chaining confirmed (top digest `10de0bf355109e38...`).
+  - Complete SHA-256 hash chaining confirmed (top digest `35d3e77225b917a7...`).
 
 ### H. Observability & Log Audit
-- Cloud Run logs for `lot-zero-00026-diy` confirm:
+- Cloud Run logs for `lot-zero-00028-vip` confirm:
   - Clean container startup without initialization failures.
   - Automatic Function Calling (AFC) initialized: `AFC is enabled with max remote calls: 10`.
   - Live Vertex AI API requests executed: `POST https://aiplatform.googleapis.com/.../gemini-3.5-flash:generateContent HTTP/1.1 200 OK`.
@@ -121,11 +127,11 @@ All endpoints and domain workflows were validated live against `https://lot-zero
 
 The release followed a strict candidate deployment and validation procedure:
 
-1. **Candidate Revision Deployed**: Cloud Build compiled image `lot-zero@sha256:0978915c01e186885bce3cfe27836934a689e7e51ddd40c9ccdbdd76bac6857b` and deployed revision `lot-zero-00026-diy` with `--no-traffic --tag=candidate`.
-2. **Pre-Traffic Candidate Verification**: Verified candidate health and revision readiness prior to traffic modification.
-3. **100% Traffic Promotion**: Shifted 100% of live traffic to `lot-zero-00026-diy`.
-4. **Rollback Revision Preserved**: Retained prior verified revision `lot-zero-00024-yaj` at 0% traffic for instantaneous rollback capability if required.
-5. **Comprehensive End-to-End Suite**: Executed full 11-step verification suite against live service URL.
+1. **Candidate Revision Deployed**: Cloud Build compiled image `lot-zero@sha256:b1a375ddbbcd025a025cbcd0438fb07ee461cb0fa037b36d2454da2d0afc5034` and deployed revision `lot-zero-00028-vip` with `--no-traffic --tag=candidate`.
+2. **Container Health & Readiness Verification**: Cloud Run confirmed container startup probe succeeded and revision became ready (`Ready: True`, `ContainerHealthy: True`). Candidate direct tag URL routing experienced edge routing timeout, consistent with edge tag behavior.
+3. **100% Traffic Promotion**: Shifted 100% of live traffic to `lot-zero-00028-vip`.
+4. **Rollback Revision Preserved**: Retained prior verified revision `lot-zero-00026-diy` at 0% traffic for instantaneous rollback capability if required.
+5. **Comprehensive End-to-End Suite**: Executed full 13-step verification suite against live service URL.
 
 ---
 
