@@ -78,7 +78,7 @@ def build_incident_projection(
         "environment_notice": "Evaluation tenant · synthetic records · no real outreach",
         "record_ids": list(case.source_record_ids),
         "source_doc_hash": DOC_HASH,
-        "source_doc_version": "v1.0 (Signed Apex Labs Report)",
+        "source_doc_version": "v1.0 (Apex Micro Quality Labs Text Notice)",
     }
 
     # 2. Runtime metadata
@@ -454,7 +454,7 @@ def build_incident_projection(
     signal_info = {
         "source_id": "LAB-SIGNAL-20260814-001",
         "sample_id": "SPL-99824",
-        "doc_version": "v1.0 (Signed Apex Labs Report)",
+        "doc_version": "v1.0 (Apex Micro Quality Labs Text Notice)",
         "doc_hash": DOC_HASH,
         "received_at": "2026-08-14T12:00:00Z",
         "lab_name": "Apex Micro Quality Labs",

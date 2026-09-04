@@ -118,10 +118,10 @@ with sync_playwright() as p:
         page.locator('select').select_option('key-closure-auth-01')
         page.wait_for_timeout(300)
         
-        # If 390, capture Modal 4 (Non-Response Close § 7.49)
+        # If 390, capture Modal 4 (Synthetic Non-Response Documentation)
         if name == '390':
-            print('Capturing Modal: Non-Response Close (§ 7.49) (Gate 5)...')
-            page.locator('button:has-text("Non-Response Close")').click()
+            print('Capturing Modal: Synthetic Non-Response Documentation (Gate 5)...')
+            page.locator('button:has-text("Record Non-Response")').click()
             page.wait_for_timeout(400)
             page.screenshot(path=f'{screenshots_dir}/390_modal_nonresponse.png')
             page.keyboard.press('Escape')

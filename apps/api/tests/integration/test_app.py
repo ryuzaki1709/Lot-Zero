@@ -48,6 +48,11 @@ def test_authentication_and_api_key_guards(client):
     # 3. Valid API key succeeds
     res_valid = client.get("/api/incidents/EVAL-CASE-01", headers={"X-API-Key": KEY_QA})
     assert res_valid.status_code == 200
+    case_body = res_valid.json()
+    assert case_body["header"]["source_doc_version"] == "v1.0 (Apex Micro Quality Labs Text Notice)"
+    assert "Signed Apex Labs Report" not in res_valid.text
+    assert "Signed laboratory report" not in res_valid.text
+    assert "Non-Response Close (§ 7.49)" not in res_valid.text
 
     # 4. Internal agent service key succeeds for authenticated incident read
     res_agent = client.get("/api/incidents/EVAL-CASE-01", headers={"X-API-Key": KEY_AGENT})
@@ -105,7 +110,14 @@ def test_hero_scenario_flow_state_assertions(client):
     # 1. Simulate Signal -> Proposes Scope & Provisional Hold
     res_signal = client.post("/api/evaluation/simulate-signal", headers={"X-API-Key": KEY_COORD})
     assert res_signal.status_code == 200
-    data_signal = res_signal.json()["projection"]
+    signal_json = res_signal.json()
+    data_signal = signal_json["projection"]
+    assert (
+        data_signal["header"]["source_doc_version"] == "v1.0 (Apex Micro Quality Labs Text Notice)"
+    )
+    assert "Signed Apex Labs Report" not in res_signal.text
+    assert "Signed laboratory report" not in res_signal.text
+    assert "Non-Response Close (§ 7.49)" not in res_signal.text
     assert len(data_signal["scopes"]) == 1
     assert data_signal["scopes"][0]["status"] == "proposed"
     assert data_signal["scopes"][0]["affected_quantity"] == 200.0

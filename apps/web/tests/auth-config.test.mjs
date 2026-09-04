@@ -268,7 +268,17 @@ test('workflow test: closure requires Recall Coord request then Closure Authorit
   assert.equal(approvalGate.includes('certified non-response'), false);
   assert.equal(approvalGate.includes('Certify & Close Under § 7.49'), false);
   assert.equal(approvalGate.includes('Non-Response Closure (§ 7.49)'), false);
+  assert.equal(approvalGate.includes('Non-Response Close (§ 7.49)'), false);
+  assert.equal(approvalGate.includes('Record Non-Response & Close'), true);
   assert.equal(approvalGate.includes('FDA-NONRESP'), false);
+
+  const signalViewer = readSrc('components/SignalViewer.jsx');
+  assert.equal(signalViewer.includes('Signed laboratory report'), false);
+  assert.equal(signalViewer.includes('Signed Apex Labs Report'), false);
+  assert.equal(
+    signalViewer.includes("Laboratory text notice ingested as the incident's root evidence."),
+    true
+  );
 
   const appJsx = readSrc('App.jsx');
   assert.equal(appJsx.includes('closed under 21 CFR'), false);

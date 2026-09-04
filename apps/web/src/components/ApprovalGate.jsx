@@ -562,7 +562,7 @@ export function ApprovalGate({
             }
           >
             <ShieldCheck size={13} />
-            Non-Response Close (§ 7.49)
+            Record Non-Response & Close
           </button>
         </div>
 
