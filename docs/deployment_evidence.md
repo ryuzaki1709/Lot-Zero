@@ -101,7 +101,7 @@ All endpoints and domain workflows were validated live against `https://lot-zero
 - **Non-Response Resolution**: `POST /api/acknowledgments/ACK-006/resolve` by `OPS-001` -> HTTP 200 OK (documented phone follow-up logged).
 - **Authorized Closure**: `POST /api/incidents/EVAL-CASE-01/close` by `CLOSURE-AUTH-01` -> HTTP 200 OK (`status: closed`, `phase: closed`).
 - **Tamper-Evident Audit Export**: `GET /api/incidents/EVAL-CASE-01/audit-export` -> HTTP 200 OK:
-  - Exactly 21 immutable ledger events verified.
+  - Exactly 21 append-oriented, SHA-256 hash-chained ledger events were included in the verified self-verifying export.
   - Complete SHA-256 hash chaining confirmed (top digest `10de0bf355109e38...`).
 
 ### H. Observability & Log Audit
