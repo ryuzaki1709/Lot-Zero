@@ -76,7 +76,7 @@ export function SignalViewer({ signal, scopes, modelName }) {
         <div>
           <h2 className="section-title">Safety signal</h2>
           <p className="section-desc">
-            Signed laboratory report ingested as the incident's root evidence. Character offsets are
+            Laboratory text notice ingested as the incident's root evidence. Character offsets are
             mechanically anchored to the SHA-256 document digest.
           </p>
         </div>

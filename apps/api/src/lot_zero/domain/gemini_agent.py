@@ -106,7 +106,7 @@ def analyze_safety_signal(
     tenant_id: str = "EVAL-TENANT-01",
     case_id: str = "EVAL-CASE-01",
     source_id: str = "LAB-SIGNAL-20260814-001",
-    doc_version: str = "v1.0 (Signed Apex Labs Report)",
+    doc_version: str = "v1.0 (Apex Micro Quality Labs Text Notice)",
 ) -> ExtractedSignal:
     """Analyze raw laboratory notice text, extract contaminated lot and bounding evidence spans.
 
