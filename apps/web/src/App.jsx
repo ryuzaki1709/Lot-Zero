@@ -459,7 +459,7 @@ export function App() {
         if (data.projection) setProjection(data.projection);
         setFeedback({
           type: 'success',
-          message: 'Incident closed under 21 CFR § 7.49 with certified non-response and FDA referral.',
+          message: 'Incident closed with synthetic non-response documentation and modeled referral note (not a legal or regulatory certification).',
         });
       } else {
         await handleApiError(res, 'Non-response closure');

@@ -192,7 +192,7 @@ def _authorize_closure(
     # Outstanding acks check
     outstanding = [ack for ack in state.acknowledgements if ack.status == "outstanding"]
     if outstanding:
-        # Check if certified good-faith non-response under 21 CFR § 7.49 is attached
+        # Check if synthetic non-response documentation (modeled workflow) is attached
         if not (
             command.non_response_filing_id and command.attempt_count and command.attempt_count >= 3
         ):

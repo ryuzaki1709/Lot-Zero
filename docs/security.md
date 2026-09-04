@@ -14,7 +14,7 @@ This document outlines the security architecture, threat model, trust assumption
 | UNTRUSTED EXTERNAL ZONE                                                 |
 | - Unauthenticated HTTP requests                                         |
 | - Arbitrary client request bodies                                       |
-| - Raw third-party laboratory PDF/text reports                           |
+| - Raw third-party laboratory unstructured text reports                  |
 +-------------------------------------------------------------------------+
                                     │
                                     ▼ [auth.py: API Key / Token Auth]
@@ -95,7 +95,7 @@ When Customer Operations approves a recall notice packet:
 ## 6. Closure Gate & Version Concurrency
 
 - **Closure Blockers**: Case closure is blocked while any consignee acknowledgement remains unverified (`is_blocked: true`).
-- **Modeled 21 CFR § 7.49 Non-Response Path**: If a consignee fails to respond after 3 documented contact attempts, a synthetic regulatory escalation referral is recorded before closure can proceed.
+- **Synthetic Non-Response Path**: If a consignee fails to respond after 3 documented contact attempts, synthetic non-response documentation with a modeled referral note is recorded before closure can proceed (not a legal or regulatory certification).
 - **Optimistic Concurrency**: Mutation commands verify `case_version`. If another operator mutated the case concurrently, the command fails with `409 Conflict`, preventing race conditions.
 
 ---
@@ -104,10 +104,10 @@ When Customer Operations approves a recall notice packet:
 
 ### What the Audit Hash Chain Guarantees:
 - **Tamper Evidence**: Every event entry includes `prior_entry_hash` and `entry_hash = SHA256(...)`. If any historic event payload, timestamp, or order is modified, the hash chain breaks.
-- **Self-Verifying Export**: The exported JSON bundle provides internal hash-chain consistency and detects post-export payload edits, reordering, or record removal when verified against the original exported root digest.
+- **Export Verification**: The verifier detects post-export payload changes, reordering, or record removal when checked against the originally retained root digest. Stronger completeness guarantees require an independently retained checkpoint.
 
 ### What It Does Not Guarantee:
-- **Immutable Hardware Storage**: The local SQLite database file (`lot_zero.db`) resides on mutable filesystem storage. The hash chain detects tampering within the exported chain, but mutable storage does not prevent a privileged root administrator from modifying or deleting the database file. Stronger completeness guarantees against whole-database modification require an independently retained root digest checkpoint or external WORM storage buckets.
+- **Immutable Hardware Storage**: The local SQLite database file (`lot_zero.db`) resides on mutable filesystem storage. The hash chain detects tampering within the exported chain, but mutable storage does not prevent a privileged root administrator from modifying or deleting the database file. Stronger completeness guarantees against whole-database modification require an independently retained checkpoint or external WORM storage.
 
 ---
 

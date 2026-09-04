@@ -204,7 +204,9 @@ def test_genai_sdk_exception_returns_review_failure(monkeypatch):
 
 
 def test_deterministic_replay_functional(monkeypatch):
-    """Verify that pure deterministic replay is functional when Vertex/GenAI are disabled."""
+    """Verify that pure deterministic replay is functional when Vertex/GenAI are disabled,
+    and prove the digest returned by analyze_safety_signal(RAW_TEXT) equals a fresh SHA-256 calculation over RAW_TEXT.
+    """
     monkeypatch.delenv("GOOGLE_GENAI_USE_VERTEXAI", raising=False)
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
 
@@ -217,3 +219,9 @@ def test_deterministic_replay_functional(monkeypatch):
     assert extracted.is_grounded is True
     assert extracted.status == "grounded"
     assert len(extracted.spans) > 0
+
+    # Focused regression test: digest must equal fresh SHA-256 calculation over RAW_TEXT rather than a constant
+    fresh_sha256 = hashlib.sha256(RAW_TEXT.encode("utf-8")).hexdigest()
+    assert extracted.doc_hash == fresh_sha256
+    for span in extracted.spans:
+        assert span.source_doc_hash == fresh_sha256

@@ -1504,7 +1504,7 @@ async def close_with_non_response(
     req: NonResponseClosureRequest,
     principal: Principal = Depends(get_current_principal),
 ):
-    """Close incident under 21 CFR § 7.49 with certified good-faith non-response and FDA District Office referral."""
+    """Close incident with synthetic non-response documentation and modeled referral note (not a legal or regulatory certification)."""
     global current_state
     now = datetime.now(UTC)
 
@@ -1562,7 +1562,7 @@ async def close_with_non_response(
             actor_id=matching_req.requester_principal_id,
             case_version=current_state.case.case_version,
             approval_id=f"APP-CLOSE-NON-RESP-{current_state.case.case_version + 1}",
-            rationale=f"CERTIFIED GOOD-FAITH CLOSURE (21 CFR § 7.49): {req.good_faith_notes}",
+            rationale=f"SYNTHETIC NON-RESPONSE DOCUMENTATION (modeled workflow): {req.good_faith_notes}",
             request_id=matching_req.request_id,
             expected_request_stream_version=matching_req.request_stream_version,
             expected_scope_version=matching_req.requested_scope_version,

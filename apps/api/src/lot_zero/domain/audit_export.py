@@ -28,7 +28,7 @@ class AuditExportEventItem(BaseModel):
 
 
 class AuditExportBundle(BaseModel):
-    """Complete, self-verifying, tamper-evident audit export for regulatory compliance."""
+    """Self-verifying, tamper-evident prototype audit export (modeled workflow, not a legal or regulatory certification)."""
 
     export_id: str
     tenant_id: str

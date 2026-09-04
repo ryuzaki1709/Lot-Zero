@@ -60,11 +60,11 @@ export function ApprovalGate({
   const [qaRationale, setQaRationale] = useState('Lab re-test SPL-99824-B satisfies negative culture release criterion under FDA BAM Ch. 5.');
   const [coordRationale, setCoordRationale] = useState('Confirmed re-test documentation attached and validated with lab director. Authorizing inventory release.');
 
-  // Non-Response 21 CFR § 7.49 Form State
-  const [regFilingId, setRegFilingId] = useState('FDA-NONRESP-2026-0814-06');
+  // Synthetic Non-Response Documentation State
+  const [regFilingId, setRegFilingId] = useState('MODEL-NONRESP-2026-0814-06');
   const [attemptCount, setAttemptCount] = useState(3);
   const [goodFaithNotes, setGoodFaithNotes] = useState(
-    '3 documented phone/certified mail outreach attempts without response. Escalated to FDA District Office pursuant to 21 CFR § 7.49.'
+    '3 documented phone/outreach attempts without response. Recorded modeled referral note pursuant to internal protocol (not a legal or regulatory certification).'
   );
 
   // Refs for modal focus management
@@ -528,7 +528,7 @@ export function ApprovalGate({
           </div>
         </div>
 
-        {/* Gate 5: Non-Response Closure (21 CFR § 7.49) */}
+        {/* Gate 5: Synthetic Non-Response Closure (Modeled Workflow) */}
         <div
           style={{
             background: 'var(--bg-surface-subtle)',
@@ -544,10 +544,10 @@ export function ApprovalGate({
         >
           <div>
             <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-primary)' }}>
-              5. Non-Response Closure (§ 7.49)
+              5. Synthetic Non-Response Closure
             </div>
             <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-              Role: <span style={{ color: 'var(--text-secondary)' }}>Closure Authority</span> — Documents certified non-response and refers to FDA District Office.
+              Role: <span style={{ color: 'var(--text-secondary)' }}>Closure Authority</span> — Records synthetic non-response documentation and modeled referral note (not a legal or regulatory certification).
             </div>
           </div>
 
@@ -558,7 +558,7 @@ export function ApprovalGate({
             title={
               !isClosureAuth && evaluationMode
                 ? 'Requires Closure Authority persona (select in top bar)'
-                : 'Document certified non-response under 21 CFR § 7.49 and refer to FDA District Office'
+                : 'Record synthetic non-response documentation and modeled referral note'
             }
           >
             <ShieldCheck size={13} />
@@ -823,7 +823,7 @@ export function ApprovalGate({
         </div>
       )}
 
-      {/* MODAL 3: Non-Response 21 CFR § 7.49 Modal */}
+      {/* MODAL 3: Synthetic Non-Response Documentation Modal */}
       {isNonResponseModalOpen && (
         <div
           className="modal-overlay"
@@ -836,7 +836,7 @@ export function ApprovalGate({
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <ShieldCheck size={16} style={{ color: 'var(--accent-primary)' }} />
-                <h3 style={{ fontSize: '14px', fontWeight: 600 }}>21 CFR § 7.49 Non-Response Closure</h3>
+                <h3 style={{ fontSize: '14px', fontWeight: 600 }}>Synthetic Non-Response Documentation</h3>
               </div>
               <button className="btn btn-ghost" style={{ padding: '4px' }} onClick={() => setIsNonResponseModalOpen(false)}>
                 <X size={16} />
@@ -845,7 +845,7 @@ export function ApprovalGate({
 
             <form onSubmit={handleNonResponseSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '12px' }}>
               <div>
-                <label className="section-label" style={{ display: 'block', marginBottom: '2px' }}>FDA Regulatory Filing ID</label>
+                <label className="section-label" style={{ display: 'block', marginBottom: '2px' }}>Modeled Regulatory Filing ID</label>
                 <input
                   ref={nonResponseFirstInputRef}
                   type="text"
@@ -869,7 +869,7 @@ export function ApprovalGate({
               </div>
 
               <div>
-                <label className="section-label" style={{ display: 'block', marginBottom: '2px' }}>Good-Faith Legal Certification Notes</label>
+                <label className="section-label" style={{ display: 'block', marginBottom: '2px' }}>Synthetic Documentation Notes</label>
                 <textarea
                   value={goodFaithNotes}
                   onChange={(e) => setGoodFaithNotes(e.target.value)}
@@ -884,7 +884,7 @@ export function ApprovalGate({
                   Cancel
                 </button>
                 <button type="submit" className="btn btn-primary">
-                  Certify & Close Under § 7.49
+                  Record Documentation & Close
                 </button>
               </div>
             </form>

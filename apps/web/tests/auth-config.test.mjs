@@ -252,6 +252,26 @@ test('workflow test: closure requires Recall Coord request then Closure Authorit
 
   // Separation of duties
   assert.notEqual(reqPersona, authPersona, 'Requester and Authorizer are distinct personas');
+
+  // Enforce honest modeled framing in UI components and prevent reintroduction of regulatory overclaims
+  const __dirname = path.dirname(fileURLToPath(import.meta.url));
+  const readSrc = (rel) => fs.readFileSync(path.resolve(__dirname, '../src', rel), 'utf-8');
+
+  const howItWorks = readSrc('components/HowItWorksModal.jsx');
+  assert.equal(howItWorks.includes('true regulatory compliance'), false);
+  assert.equal(howItWorks.includes('Authentic Compliance'), false);
+
+  const evidenceLedger = readSrc('components/EvidenceLedger.jsx');
+  assert.equal(evidenceLedger.includes('archived under 21 CFR'), false);
+
+  const approvalGate = readSrc('components/ApprovalGate.jsx');
+  assert.equal(approvalGate.includes('certified non-response'), false);
+  assert.equal(approvalGate.includes('Certify & Close Under § 7.49'), false);
+  assert.equal(approvalGate.includes('Non-Response Closure (§ 7.49)'), false);
+  assert.equal(approvalGate.includes('FDA-NONRESP'), false);
+
+  const appJsx = readSrc('App.jsx');
+  assert.equal(appJsx.includes('closed under 21 CFR'), false);
 });
 
 test('workflow test: unverified ACK-006 blocks ordinary closure and resolution enables it', () => {

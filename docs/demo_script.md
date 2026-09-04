@@ -19,11 +19,11 @@ This script provides step-by-step instructions for demonstrating **Lot Zero** in
 - **Action**: Click **Simulate Signal**.
 - **Verification**:
   - Phase advances to `provisional_containment`.
-  - Signal Viewer highlights *Salmonella enterica serovar Typhimurium* and Lot `ING-4417` with green verbatim citation offset boxes anchored to SHA-256 digest `e3b0c442...`.
-  - Units on hold displays `200` units (`FP-100-AFF`).
-  - False holds displays `0` units (proves adjacent batch `FP-100-ADJ` is unquarantined).
+  - Signal Viewer highlights *Salmonella enterica serovar Typhimurium* and Lot `ING-4417` (Organic Wheat Flour) with green verbatim citation offset boxes and dynamic document hash verification.
+  - Units on hold displays `200` units across two finished batches (`FP-100-L240814-A`: 120 units, `FP-100-L240814-B`: 80 units).
+  - False holds displays `0` units (verifies adjacent clean control batch `FP-100-ADJ`, 100 units, is unquarantined in the synthetic fixture).
   - Standing policy: `EVAL-HOLD-01 · provisional soft hold (30m)`.
-- **Narration**: *"An incoming Apex Labs report is parsed by Gemini 3.5 Flash. The agent extracts contaminated lot ING-4417 with exact character-offset citations. It immediately traverses the supply chain graph and places a 30-minute soft hold on 200 affected units, while leaving adjacent clean batches untouched with zero false holds."*
+- **Narration**: *"An incoming Apex Micro Quality Labs unstructured text notice is parsed by Gemini 3.5 Flash. The agent extracts contaminated lot ING-4417 (Organic Wheat Flour) with exact character-offset citations. It immediately traverses the supply chain graph and places a 30-minute soft hold on 200 affected units across two finished batches (FP-100-L240814-A: 120 units and FP-100-L240814-B: 80 units), while the demonstrated synthetic scenario leaves adjacent clean control batch FP-100-ADJ (100 units) unheld (zero false holds in the synthetic evaluation fixture)."*
 
 ---
 
@@ -81,7 +81,7 @@ This script provides step-by-step instructions for demonstrating **Lot Zero** in
 - **Verification**:
   - Phase advances to `closed`.
   - Units on hold returns to `0`.
-  - Evidence Ledger displays: *Incident disposition complete — tamper-evident audit record archived under 21 CFR*.
+  - Evidence Ledger displays: *Incident disposition complete — recorded in the tamper-evident audit stream (not a legal or regulatory certification)*.
 - **Narration**: *"Customer Operations logs a phone attestation from the distributor. With all consignees verified, the Closure Authority signs the final closure command, moving the incident to closed status."*
 
 ---
@@ -89,7 +89,7 @@ This script provides step-by-step instructions for demonstrating **Lot Zero** in
 ### Step 6: Self-Verifying Audit Export
 - **Action**: Click **Export Audit Bundle** in the top navigation bar.
 - **Verification**: A JSON file `lot_zero_audit_EVAL-CASE-01.json` is downloaded containing all hash-chained events with `prior_entry_hash` and top-level `root_digest`.
-- **Narration**: *"Every single decision, approval, and state transition was recorded to an append-oriented event store with a SHA-256 cryptographic hash chain, providing a self-verifying audit bundle for regulators."*
+- **Narration**: *"Every single decision, approval, and state transition was recorded to an append-oriented event store with a SHA-256 cryptographic hash chain. The verifier detects post-export payload changes, reordering, or record removal when checked against the originally retained root digest."*
 
 ---
 

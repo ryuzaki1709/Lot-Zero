@@ -49,11 +49,11 @@ export function EvidenceLedger({
           }`}
         />
         {isClosed
-          ? 'Incident disposition complete — tamper-evident audit record archived under 21 CFR.'
+          ? 'Incident disposition complete — recorded in the tamper-evident audit stream (not a legal or regulatory certification).'
           : isBlocked
           ? `Closure blocked — ${
               (closureGate?.outstanding_acknowledgements || []).join(', ') || 'consignee acknowledgements'
-            } unverified. Resolve by phone attestation or non-response filing.`
+            } unverified. Resolve by phone attestation or synthetic non-response documentation.`
           : 'Incident case active — containment and consignee tracking in progress.'}
       </div>
 

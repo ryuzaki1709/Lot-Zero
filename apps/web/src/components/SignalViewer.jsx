@@ -105,7 +105,7 @@ export function SignalViewer({ signal, scopes, modelName }) {
                 flexWrap: 'wrap',
               }}
             >
-              <span>{signal.doc_version || 'v1.0 · signed lab PDF'}</span>
+              <span>{signal.doc_version || 'v1.0 · laboratory text notice'}</span>
               <span className="mono-val">{signal.source_id}</span>
             </div>
 

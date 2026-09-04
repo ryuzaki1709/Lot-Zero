@@ -345,7 +345,7 @@ def test_sequential_dual_signature_release_authority(client):
 
 
 def test_section_749_non_response_closure_and_referral(client):
-    """Test 21 CFR § 7.49 non-response closure pathway with certified FDA referral."""
+    """Test synthetic non-response closure pathway with modeled referral note."""
     client.post("/api/evaluation/simulate-signal", headers={"X-API-Key": KEY_COORD})
     client.post(
         "/api/evaluation/approve-containment",
@@ -387,6 +387,10 @@ def test_section_749_non_response_closure_and_referral(client):
     data = res_close.json()
     assert data["regulatory_filing_id"] == "FDA-SAN-2026-NR-0091"
     assert data["projection"]["header"]["phase"] == "closed"
+    approvals = data["projection"]["approvals"]
+    closure_app = next(a for a in approvals if a.get("approval_type") == "closure")
+    assert "SYNTHETIC NON-RESPONSE DOCUMENTATION" in closure_app["rationale"]
+    assert "CERTIFIED GOOD-FAITH" not in closure_app["rationale"]
 
 
 def test_phone_attestation_ack_resolution(client):

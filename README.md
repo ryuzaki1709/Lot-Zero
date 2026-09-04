@@ -4,10 +4,10 @@
 > *Packaged for Google Cloud Run, supporting Google Gemini on Vertex AI when configured, Deterministic Supply Chain Genealogy Traversal, Strict Separation-of-Duties Authority Kernel, FastAPI, and React.*
 
 [![Gemini 3.5 Flash](https://img.shields.io/badge/Google_GenAI-Gemini_3.5_Flash-34A853?style=for-the-badge&logo=googlegemini&logoColor=white)](https://cloud.google.com/vertex-ai)
-[![Pytest Suite](https://img.shields.io/badge/Pytest-164_Passed-00C853?style=for-the-badge&logo=pytest&logoColor=white)](apps/api/tests/)
+[![Pytest Suite](https://img.shields.io/badge/Pytest-169_Passed-00C853?style=for-the-badge&logo=pytest&logoColor=white)](apps/api/tests/)
 [![Frontend Tests](https://img.shields.io/badge/Node_Test-25_Passed-43853D?style=for-the-badge&logo=node.js&logoColor=white)](apps/web/tests/)
 
-**Live Evaluation Deployment**: `[LIVE_DEMO_URL_PLACEHOLDER]` *(Deploy and verify service before inserting public URL)*
+**Live Evaluation Deployment**: [https://lot-zero-m4vizenaoa-uc.a.run.app](https://lot-zero-m4vizenaoa-uc.a.run.app)
 **Submission Repository**: [**https://github.com/ryuzaki1709/lot-zero**](https://github.com/ryuzaki1709/lot-zero)
 **Demonstration Video**: `[DEMO_VIDEO_URL_PLACEHOLDER]`
 **Hackathon Submission**: `[SUBMISSION_URL_PLACEHOLDER]`
@@ -17,7 +17,7 @@
 ## 1. Product Summary & Problem Statement
 
 ### One-Sentence Pitch
-**Lot Zero** is an evidence-grounded recall incident workspace that ingests lab contamination signals using Google Gemini, deterministically bounds contaminated product via genealogy graph traversal with zero false holds, enforces strict separation-of-duties authority gates, and logs tamper-evident audit ledgers for regulated food safety operations.
+**Lot Zero** is an evidence-grounded recall incident workspace that ingests lab contamination signals using Google Gemini, deterministically bounds contaminated product via genealogy graph traversal (zero false holds in the synthetic evaluation fixture), enforces strict separation-of-duties authority gates, and logs tamper-evident audit ledgers for regulated food safety operations.
 
 ### The Problem
 When pathogenic contamination (such as *Salmonella enterica*) is detected in a food processing facility, recall coordinators and quality assurance leads face severe challenges:
@@ -28,7 +28,7 @@ When pathogenic contamination (such as *Salmonella enterica*) is detected in a f
 ### The Solution
 Lot Zero replaces ad-hoc spreadsheets and unconstrained chat prompts with a **disciplined agentic architecture**:
 - **Grounded Ingestion**: Gemini extracts positive pathogen findings and contaminated raw lots with verbatim character-offset citation spans dynamically verified against the lab report's SHA-256 digest.
-- **Deterministic Genealogy Traversal**: Graph traversal identifies exact downstream finished batches (`FP-100-AFF`, 200 units) while proving adjacent clean batches (`FP-100-ADJ`) remain unquarantined (0 false holds).
+- **Deterministic Genealogy Traversal**: Graph traversal identifies exact downstream finished batches (`FP-100-L240814-A`: 120 units, `FP-100-L240814-B`: 80 units, totaling 200 units) while the demonstrated synthetic scenario leaves clean control batches (`FP-100-ADJ`, 100 units) unheld (zero false holds in the synthetic evaluation fixture).
 - **Strict Separation of Duties**: Multi-persona governance blocks self-approvals (`requester != approver`) and enforces dual signatures for biological clearance and operational release.
 - **Append-Oriented Audit Integrity**: State mutations produce a SHA-256 hash-chained event ledger backing a self-verifying audit export bundle.
 
@@ -74,7 +74,7 @@ All actions within Lot Zero enforce separation of duties. When `LOT_ZERO_EVALUAT
 | **Evaluation Administrator** | `EVAL-ADMIN-01` | `eval_admin` | `key-eval-admin-01` | Baseline state reset, archive prior evaluation runs |
 | **Recall Coordinator** | `RECALL-COORD-01` | `recall_coordinator` | `key-recall-coord-01` | Lab signal simulation, scope proposal, draft notice packet, request closure |
 | **QA Lead** | `QA-LEAD-01` | `qa` | `key-qa-lead-01` | Approve firm quarantine (`AUTH-HOLD-01`), biological clearance signature |
-| **Customer Operations** | `OPS-01` | `customer_operations` | `key-ops-01` | Approve notice packet, dispatch recall outbox, log consignee phone attestation |
+| **Customer Operations** | `OPS-001` | `customer_operations` | `key-ops-01` | Approve notice packet, dispatch recall outbox, log consignee phone attestation |
 | **Closure Authority** | `CLOSURE-AUTH-01` | `closure_authority` | `key-closure-auth-01` | Step 2 operational release, authorize final case closure |
 
 > [!IMPORTANT]
@@ -86,28 +86,29 @@ All actions within Lot Zero enforce separation of duties. When `LOT_ZERO_EVALUAT
 
 ### Live Gemini Grounding Mode
 When configured with Google Cloud credentials (`GOOGLE_GENAI_USE_VERTEXAI=true`, `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION="global"`), Lot Zero supports live model execution via the official `google-genai` SDK on Google Vertex AI using `gemini-3.5-flash`.
-- Ingests raw Apex Labs PDF/text reports.
-- Extracts pathogen (`Salmonella enterica serovar Typhimurium`) and contaminated lot (`ING-4417`).
-- Extracts exact start/end character offsets anchored to the document's SHA-256 digest (`e3b0c442...`).
+- Ingests raw Apex Micro Quality Labs unstructured laboratory text notices.
+- Extracts pathogen (`Salmonella enterica serovar Typhimurium`) and contaminated lot (`ING-4417`, Organic Wheat Flour).
+- Extracts exact start/end character offsets with document hash verification (the application computes the SHA-256 digest dynamically from the exact source notice text).
 
 ### Deterministic Replay Evaluation Mode
 When Vertex AI credentials or project configuration are not provided, Lot Zero uses a built-in deterministic extraction engine (`gemini-3.5-flash (Deterministic Replay)`).
-- Pre-grounded character-exact citations from the verified Apex Labs evaluation report are replayed with complete fidelity.
+- Pre-grounded character-exact citations from the verified Apex Micro Quality Labs evaluation report are replayed with complete fidelity.
 - Displayed prominently in the UI banner as `gemini-3.5-flash (Deterministic Replay)` to maintain transparency.
 
 ---
 
-## 5. Supply Chain Genealogy & Zero False Holds
+## 5. Supply Chain Genealogy & Clean Batch Isolation
 
 Lot Zero executes deterministic graph traversal over batch genealogy records:
 
 | Lot ID | Type | Quantity | Status | Isolation Rationale |
 | :--- | :--- | :--- | :--- | :--- |
-| `ING-4417` | Raw Organic Whey | 50.0 kg | Contaminated | Positive for *Salmonella* in Apex Labs Report #LAB-2026-0814 |
-| `FP-100-AFF` | Finished Protein Shake | 200.0 units | **Quarantined** | Consumed 50 kg of `ING-4417` on Line 2 |
-| `FP-100-ADJ` | Finished Protein Shake | 150.0 units | **Clean (0 False Holds)** | Adjacent packaging run utilizing clean lot `ING-4416` |
+| `ING-4417` | Organic Wheat Flour | — | Contaminated | Positive for *Salmonella* in Apex Micro Quality Labs Report |
+| `FP-100-L240814-A` | Finished Good Batch | 120.0 units | **Quarantined** | Consumed contaminated ingredient lot `ING-4417` |
+| `FP-100-L240814-B` | Finished Good Batch | 80.0 units | **Quarantined** | Consumed contaminated ingredient lot `ING-4417` (total: 200.0 units) |
+| `FP-100-ADJ` | Finished Good Batch | 100.0 units | **Clean (0 False Holds)** | Adjacent packaging run utilizing clean control lot `ING-4418` |
 
-**Zero-False-Hold Demonstration**: The system explicitly leaves `FP-100-ADJ` untouched, demonstrating zero false holds and preventing unnecessary product destruction.
+**Clean Batch Isolation in Synthetic Fixture**: The demonstrated synthetic scenario leaves `FP-100-ADJ` unheld, achieving zero false holds in the synthetic evaluation fixture and preventing unnecessary destruction of clean inventory.
 
 ---
 
@@ -127,7 +128,7 @@ The export returns:
 - `root_digest`: Top-level hash representing the entire chained history.
 - `events`: Array of chained events containing `entry_hash`, `prior_entry_hash`, and signed authority payloads.
 
-*Note on Tamper Evidence*: The exported bundle provides internal hash-chain consistency and detects post-export payload edits, reordering, or record removal when verified against the original exported root digest. Stronger completeness guarantees against whole-database modification or deletion require an independently retained root digest checkpoint or external WORM storage.
+*Note on Tamper Evidence*: The verifier detects post-export payload changes, reordering, or record removal when checked against the originally retained root digest. Stronger completeness guarantees require an independently retained checkpoint.
 
 ---
 
@@ -206,7 +207,7 @@ The application runtime is configured via the following environment variables:
 
 ### Backend Verification Suite
 ```powershell
-# Run 164 unit, integration, and contract tests
+# Run 169 unit, integration, and contract tests
 .\.venv\Scripts\python.exe -m pytest .\apps\api\tests -q --tb=short -p no:cacheprovider
 
 # Run Ruff linter and formatter checks
@@ -272,8 +273,8 @@ Follow this workflow in the web UI ([http://localhost:8000](http://localhost:800
    - Click **Reset State** -> Confirm. The incident reinitializes to the baseline `signal_received` phase and archives prior runs.
 2. **Ingest Lab Safety Signal** (`Recall Coordinator`):
    - Switch persona to **Recall Coordinator**.
-   - Click **Simulate Signal**. Grounded extraction ingests Apex Labs report `#LAB-2026-0814`.
-   - The system computes genealogy: `ING-4417` $\to$ `FP-100-AFF` (200 units) and places a 30m soft hold, advancing the case to `provisional_containment`.
+   - Click **Simulate Signal**. Grounded extraction ingests Apex Micro Quality Labs report.
+   - The system computes genealogy: `ING-4417` $\to$ `FP-100-L240814-A` (120 units) and `FP-100-L240814-B` (80 units), totaling 200 units, and places a 30m soft hold, advancing the case to `provisional_containment`.
 3. **Approve Firm Quarantine** (`QA Lead`):
    - Switch persona to **QA Lead**.
    - Click **Approve Firm Quarantine (QA)** with rationale. Policy upgrades to `AUTH-HOLD-01` and advances the case to `action_review`.
@@ -307,7 +308,7 @@ Follow this workflow in the web UI ([http://localhost:8000](http://localhost:800
 
 ## 14. Project Links & Documentation
 
-- **Live Service URL**: `[LIVE_DEMO_URL_PLACEHOLDER]` *(Staging evaluation deployment)*
+- **Live Service URL**: [https://lot-zero-m4vizenaoa-uc.a.run.app](https://lot-zero-m4vizenaoa-uc.a.run.app)
 - **GitHub Repository**: [https://github.com/ryuzaki1709/lot-zero](https://github.com/ryuzaki1709/lot-zero)
 - **Demonstration Video**: `[DEMO_VIDEO_URL_PLACEHOLDER]`
 - **Submission Document**: [docs/submission.md](docs/submission.md)
@@ -315,3 +316,5 @@ Follow this workflow in the web UI ([http://localhost:8000](http://localhost:800
 - **Security & Trust Specification**: [docs/security.md](docs/security.md)
 - **Demo Script**: [docs/demo_script.md](docs/demo_script.md)
 - **Deployment Specification**: [docs/deployment.md](docs/deployment.md)
+- **Deployment Evidence & Verification**: [docs/deployment_evidence.md](docs/deployment_evidence.md)
+- **Late-Submission Rescue & Portfolio Launch**: [docs/late_submission_rescue.md](docs/late_submission_rescue.md)
