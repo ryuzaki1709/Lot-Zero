@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 
 from .identifiers import ActionIntent
-from .models import DomainRecord, IncidentState
+from .models import AffectedScope, DomainRecord, IncidentState
 
 _EVAL_HOLD_POLICY = "EVAL-HOLD-01"
 _EVAL_HOLD_MAXIMUM = Decimal("200")
@@ -25,7 +25,7 @@ def _denied(code: str, explanation: str) -> PolicyDecision:
     return PolicyDecision(allowed=False, code=code, explanation=explanation)
 
 
-def _matching_scope(intent: ActionIntent, state: IncidentState):
+def _matching_scope(intent: ActionIntent, state: IncidentState) -> AffectedScope | None:
     return next((scope for scope in state.scopes if scope.scope_id == intent.scope_id), None)
 
 

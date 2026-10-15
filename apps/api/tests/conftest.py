@@ -4,17 +4,19 @@ import os
 
 import pytest
 
-# Ensure evaluation mode is active by default for test execution
+# Ensure evaluation mode is active and live external models are disabled by default for test execution
 os.environ["LOT_ZERO_EVALUATION_MODE"] = "true"
 os.environ["LOT_ZERO_SSE_SECRET"] = "lot-zero-ephemeral-sse-token-secret-key-2026-test-32chars"
 os.environ["LOT_ZERO_ALLOWED_ORIGINS"] = (
     "http://localhost:5173,http://127.0.0.1:5173,http://localhost:8000,http://127.0.0.1:8000"
 )
+os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "false"
+os.environ.pop("GEMINI_API_KEY", None)
 
 
 @pytest.fixture(autouse=True)
 def ensure_evaluation_mode(monkeypatch):
-    """Keep evaluation mode active by default for all test cases."""
+    """Keep evaluation mode active and prevent live external model calls by default for all test cases."""
     monkeypatch.setenv("LOT_ZERO_EVALUATION_MODE", "true")
     monkeypatch.setenv(
         "LOT_ZERO_SSE_SECRET", "lot-zero-ephemeral-sse-token-secret-key-2026-test-32chars"
@@ -23,3 +25,5 @@ def ensure_evaluation_mode(monkeypatch):
         "LOT_ZERO_ALLOWED_ORIGINS",
         "http://localhost:5173,http://127.0.0.1:5173,http://localhost:8000,http://127.0.0.1:8000",
     )
+    monkeypatch.setenv("GOOGLE_GENAI_USE_VERTEXAI", "false")
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)

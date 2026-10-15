@@ -612,38 +612,60 @@ export function ApprovalGate({
             borderRadius: 'var(--radius-md)',
             padding: '12px',
             display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            flexWrap: 'wrap',
+            flexDirection: 'column',
             gap: '8px',
           }}
         >
-          <div>
-            <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-primary)' }}>
-              6b. Authorize Incident Closure
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-primary)' }}>
+                6b. Authorize Incident Closure
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                Role: <span style={{ color: 'var(--text-secondary)' }}>Closure Authority</span> — Signs final case closure disposition.
+              </div>
             </div>
-            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-              Role: <span style={{ color: 'var(--text-secondary)' }}>Closure Authority</span> — Signs final case closure disposition.
-            </div>
+
+            <button
+              className={`btn ${isClosed ? 'btn-secondary' : isClosureRequested && !closureGate?.is_blocked ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => onAuthorizeClosure && onAuthorizeClosure(activeClosureReq?.request_id)}
+              disabled={loading || !isClosureRequested || closureGate?.is_blocked || isClosed || (!isClosureAuth && evaluationMode)}
+              title={
+                closureGate?.is_blocked
+                  ? `Closure blocked: Unverified consignee acknowledgements remain (${outstandingAcks.length > 0 ? outstandingAcks.join(', ') : 'consignee acknowledgements pending'}).`
+                  : !isClosureRequested
+                  ? 'Awaiting Recall Coordinator closure request'
+                  : !isClosureAuth && evaluationMode
+                  ? 'Requires Closure Authority persona (select in top bar)'
+                  : 'Closure Authority: sign final case closure disposition'
+              }
+            >
+              <CheckCircle2 size={13} />
+              {isClosed ? 'Case Closed & Archived' : 'Authorize Final Closure (Closure Auth)'}
+            </button>
           </div>
 
-          <button
-            className={`btn ${isClosed ? 'btn-secondary' : isClosureRequested && !closureGate?.is_blocked ? 'btn-primary' : 'btn-ghost'}`}
-            onClick={() => onAuthorizeClosure && onAuthorizeClosure(activeClosureReq?.request_id)}
-            disabled={loading || !isClosureRequested || closureGate?.is_blocked || isClosed || (!isClosureAuth && evaluationMode)}
-            title={
-              closureGate?.is_blocked
-                ? `Closure blocked: Unverified consignee acknowledgements remain (${outstandingAcks.join(', ')}).`
-                : !isClosureRequested
-                ? 'Awaiting Recall Coordinator closure request'
-                : !isClosureAuth && evaluationMode
-                ? 'Requires Closure Authority persona (select in top bar)'
-                : 'Closure Authority: sign final case closure disposition'
-            }
-          >
-            <CheckCircle2 size={13} />
-            {isClosed ? 'Case Closed & Archived' : 'Authorize Final Closure (Closure Auth)'}
-          </button>
+          {closureGate?.is_blocked && !isClosed && (
+            <div
+              style={{
+                marginTop: '4px',
+                padding: '8px 12px',
+                background: 'rgba(239, 68, 68, 0.12)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                borderRadius: 'var(--radius-sm)',
+                color: 'var(--status-danger-text)',
+                fontSize: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+              }}
+            >
+              <span className="status-dot status-dot-danger" />
+              <span>
+                <strong>Closure blocked:</strong> Unverified consignee acknowledgements remain ({outstandingAcks.length > 0 ? outstandingAcks.join(', ') : 'consignee acknowledgements pending'}). Resolve via Gate 3.
+              </span>
+            </div>
+          )}
         </div>
       </div>
 

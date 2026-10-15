@@ -6,11 +6,12 @@ import asyncio
 import hashlib
 import json
 import logging
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -113,7 +114,7 @@ containment_executor = ContainmentExecutor(repository=repository, sink=notificat
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Validate configuration and rehydrate current_state from durable SQLite on startup."""
     global current_state
     # 1. Fail-fast validation in non-evaluation mode
@@ -204,7 +205,7 @@ async def broadcast_state(state: IncidentState) -> None:
 
 @app.get("/healthz")
 @app.get("/api/health")
-async def health():
+async def health() -> dict[str, Any]:
     return {
         "status": "ok",
         "service": "lot-zero-api",
@@ -215,7 +216,7 @@ async def health():
 
 @app.get("/api/config")
 @app.get("/api/evaluation/personas")
-async def get_app_config():
+async def get_app_config() -> dict[str, Any]:
     """Return runtime configuration and synthetic evaluation personas if evaluation mode is active."""
     return {
         "evaluation_mode": config.evaluation_mode,
@@ -229,7 +230,7 @@ async def get_incident(
     case_id: str,
     request: Request,
     principal: Principal = Depends(get_current_principal),
-):
+) -> Any:
     """Retrieve full incident projection with authentic access auditing and server TTL sync."""
     global current_state
     now = datetime.now(UTC)
@@ -256,7 +257,7 @@ async def get_incident(
 
 
 @app.post("/api/sse-token")
-async def issue_sse_token(principal: Principal = Depends(get_current_principal)):
+async def issue_sse_token(principal: Principal = Depends(get_current_principal)) -> dict[str, Any]:
     """Issue short-lived (60s) HMAC-signed token for EventSource authentication."""
     token = create_sse_token(principal, ttl_seconds=60)
     return {
@@ -272,7 +273,7 @@ async def sse_events(
     case_id: str,
     token: str | None = None,
     x_api_key: str | None = Header(default=None),
-):
+) -> StreamingResponse:
     """Subscribe to real-time incident state changes via partitioned Server-Sent Events."""
     principal = None
     if token:
@@ -304,7 +305,7 @@ async def sse_events(
         subscribers[key] = []
     subscribers[key].append(queue)
 
-    async def event_generator():
+    async def event_generator() -> AsyncIterator[str]:
         initial_proj = build_incident_projection(current_state)
         yield f"data: {json.dumps(initial_proj)}\n\n"
         try:
@@ -411,7 +412,7 @@ async def export_case_audit(
 
 
 @app.post("/api/evaluation/reset")
-async def reset_evaluation(principal: Principal = Depends(get_current_principal)):
+async def reset_evaluation(principal: Principal = Depends(get_current_principal)) -> dict[str, Any]:
     """Reset evaluation tenant to initial clean baseline. Requires evaluation mode and admin capability."""
     global current_state
     if not config.evaluation_mode:
@@ -437,7 +438,7 @@ async def reset_evaluation(principal: Principal = Depends(get_current_principal)
 
 
 @app.post("/api/evaluation/simulate-signal")
-async def simulate_signal(principal: Principal = Depends(get_current_principal)):
+async def simulate_signal(principal: Principal = Depends(get_current_principal)) -> dict[str, Any]:
     """Trigger autonomous Gemini signal analysis, propose scope, and set server-side provisional hold."""
     global current_state
     now = datetime.now(UTC)
@@ -676,7 +677,7 @@ class ApprovalRequest(BaseModel):
 async def approve_containment(
     req: ApprovalRequest,
     principal: Principal = Depends(get_current_principal),
-):
+) -> dict[str, Any]:
     """Authorize provisional hold & containment as QA through pure authority boundary."""
     global current_state
     now = datetime.now(UTC)
@@ -801,7 +802,7 @@ class RequestNotificationRequest(BaseModel):
 async def request_notification(
     req: RequestNotificationRequest | None = None,
     principal: Principal = Depends(get_current_principal),
-):
+) -> dict[str, Any]:
     """Recall Coordinator requests drafting of notification packet for Customer Operations approval."""
     global current_state
     now = datetime.now(UTC)
@@ -875,7 +876,7 @@ class ApproveNotificationRequest(BaseModel):
 async def approve_notification(
     req: ApproveNotificationRequest,
     principal: Principal = Depends(get_current_principal),
-):
+) -> dict[str, Any]:
     """Customer Operations approves notification packet payload for dispatch."""
     global current_state
     now = datetime.now(UTC)
@@ -949,7 +950,7 @@ async def approve_notification(
 
 
 @app.post("/api/evaluation/dispatch-outbox")
-async def dispatch_outbox(principal: Principal = Depends(get_current_principal)):
+async def dispatch_outbox(principal: Principal = Depends(get_current_principal)) -> dict[str, Any]:
     """Dispatch recipient notification packets and record acknowledgements via kernel commands."""
     global current_state
     now = datetime.now(UTC)
@@ -1066,7 +1067,7 @@ class PhoneAckAttestationRequest(BaseModel):
 async def resolve_ack(
     req: PhoneAckAttestationRequest,
     principal: Principal = Depends(get_current_principal),
-):
+) -> dict[str, Any]:
     """Record signed phone attestation verifying distributor ACK-006 through domain kernel."""
     global current_state
     now = datetime.now(UTC)
@@ -1155,7 +1156,7 @@ class ReleaseStepRequest(BaseModel):
 async def release_hold_step(
     req: ReleaseStepRequest,
     principal: Principal = Depends(get_current_principal),
-):
+) -> dict[str, Any]:
     """Execute sequential dual-signature release step (Step 1: QA biological clearance, Step 2: Closure Authority release)."""
     global current_state
     now = datetime.now(UTC)
@@ -1249,7 +1250,7 @@ class RequestClosureBody(BaseModel):
 async def request_closure(
     body: RequestClosureBody | None = None,
     principal: Principal = Depends(get_current_principal),
-):
+) -> dict[str, Any]:
     """Recall Coordinator requests formal closure review, creating an immutable ClosureRequest record."""
     global current_state
     now = datetime.now(UTC)
@@ -1342,7 +1343,7 @@ class AuthorizeClosureBody(BaseModel):
 async def authorize_closure(
     body: AuthorizeClosureBody | None = None,
     principal: Principal = Depends(get_current_principal),
-):
+) -> dict[str, Any]:
     """Closure Authority authorizes incident closure matching an active unconsumed ClosureRequest."""
     global current_state
     now = datetime.now(UTC)
@@ -1503,7 +1504,7 @@ class NonResponseClosureRequest(BaseModel):
 async def close_with_non_response(
     req: NonResponseClosureRequest,
     principal: Principal = Depends(get_current_principal),
-):
+) -> dict[str, Any]:
     """Close incident with synthetic non-response documentation and modeled referral note (not a legal or regulatory certification)."""
     global current_state
     now = datetime.now(UTC)
@@ -1665,7 +1666,7 @@ if static_dir is not None:
         app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
 
     @app.get("/{full_path:path}")
-    async def serve_spa(full_path: str):
+    async def serve_spa(full_path: str) -> FileResponse:
         if full_path.startswith("api/"):
             raise HTTPException(status_code=404, detail=f"API endpoint '/{full_path}' not found")
         file_path = current_static_dir / full_path
