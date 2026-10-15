@@ -10,8 +10,10 @@ from lot_zero.domain.gemini_agent import (
 from lot_zero.domain.selectors import RAW_TEXT
 
 
-def test_gemini_grounding_follows_document():
+def test_gemini_grounding_follows_document(monkeypatch):
     """Verify that extraction follows the input document dynamically rather than returning constants."""
+    monkeypatch.delenv("GOOGLE_GENAI_USE_VERTEXAI", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     custom_doc = (
         "[EMERGENCY LAB ALERT - PACIFIC QUALITY LABS]\n"
         "SAMPLE ID: SPL-100492 | DATE: 2026-08-16 08:30 UTC\n"
@@ -109,8 +111,10 @@ def test_hallucinated_claims_rejected():
     assert "not found verbatim" in extracted.discarded_claims[0]["reason"].lower()
 
 
-def test_changing_document_changes_doc_hash_and_offsets():
+def test_changing_document_changes_doc_hash_and_offsets(monkeypatch):
     """Verify that prepending header text changes doc hash and shifts mechanical offsets."""
+    monkeypatch.delenv("GOOGLE_GENAI_USE_VERTEXAI", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     prefix = "--- CONFIDENTIAL REGULATORY SUBMISSION HEADER ---\nINSPECTOR: AGENT-07\n\n"
     shifted_doc = prefix + RAW_TEXT
 
@@ -201,6 +205,40 @@ def test_genai_sdk_exception_returns_review_failure(monkeypatch):
     assert extracted.is_live_model is False
     assert extracted.spans == ()
     assert "Google GenAI Failure: ConnectionError" in extracted.model_version
+
+
+def test_genai_sdk_live_success_mocked(monkeypatch):
+    """Verify that Google GenAI Live mode branch succeeds when mocked offline."""
+    from unittest.mock import MagicMock, patch
+
+    monkeypatch.delenv("GOOGLE_GENAI_USE_VERTEXAI", raising=False)
+    monkeypatch.setenv("GEMINI_API_KEY", "fake-test-key")
+
+    fake_schema = SignalAnalysisSchema(
+        ingredient_lot="ING-4417",
+        pathogen="Salmonella enterica",
+        claims=[
+            ClaimExtraction(
+                claim_type="Biohazard Finding",
+                verbatim_quote="POSITIVE for Salmonella enterica",
+            )
+        ],
+    )
+
+    with patch("google.genai.Client") as mock_client_cls:
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+        mock_response = MagicMock()
+        mock_response.text = fake_schema.model_dump_json()
+        mock_client.models.generate_content.return_value = mock_response
+
+        extracted = analyze_safety_signal(RAW_TEXT)
+
+    assert extracted.ingredient_lot == "ING-4417"
+    assert extracted.pathogen == "Salmonella enterica"
+    assert extracted.is_live_model is True
+    assert extracted.model_version == "gemini-3.5-flash (Google GenAI Live)"
+    assert extracted.status == "grounded"
 
 
 def test_deterministic_replay_functional(monkeypatch):

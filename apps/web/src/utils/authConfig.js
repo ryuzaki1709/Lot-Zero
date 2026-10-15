@@ -7,6 +7,54 @@ export function isDemoCredential(key) {
   return key.startsWith('key-') || key.includes('eval-') || key.includes('demo');
 }
 
+/**
+ * Safely inspect and return window.localStorage if accessible.
+ * Returns null if localStorage is undefined, blocked, partitioned, or throws SecurityError.
+ */
+export function getSafeStorage() {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const testKey = '__lot_zero_storage_test__';
+      window.localStorage.setItem(testKey, '1');
+      window.localStorage.removeItem(testKey);
+      return window.localStorage;
+    }
+  } catch (_) {
+    // Storage access denied (e.g. sandboxed iframe, incognito, disabled cookies)
+  }
+  return null;
+}
+
+export function safeGetItem(storage, key, defaultValue = '') {
+  if (!storage) return defaultValue;
+  try {
+    const val = storage.getItem(key);
+    return val !== null && val !== undefined ? val : defaultValue;
+  } catch (_) {
+    return defaultValue;
+  }
+}
+
+export function safeSetItem(storage, key, value) {
+  if (!storage) return false;
+  try {
+    storage.setItem(key, String(value));
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+export function safeRemoveItem(storage, key) {
+  if (!storage) return false;
+  try {
+    storage.removeItem(key);
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
 export function normalizeConfig(serverData, currentStoredKey = '', storage = null) {
   // Server-confirmed evaluation mode
   if (serverData && serverData.evaluation_mode === true) {
@@ -19,11 +67,7 @@ export function normalizeConfig(serverData, currentStoredKey = '', storage = nul
       activeKey = matchingPersona.key;
     } else if (personas.length > 0) {
       activeKey = personas[0].key;
-      if (storage) {
-        try {
-          storage.setItem('lot_zero_api_key', activeKey);
-        } catch (_) {}
-      }
+      safeSetItem(storage, 'lot_zero_api_key', activeKey);
     }
 
     return {
@@ -37,10 +81,8 @@ export function normalizeConfig(serverData, currentStoredKey = '', storage = nul
   }
 
   // Non-evaluation mode or server failure: FAIL CLOSED
-  if (storage && currentStoredKey && isDemoCredential(currentStoredKey)) {
-    try {
-      storage.removeItem('lot_zero_api_key');
-    } catch (_) {}
+  if (currentStoredKey && isDemoCredential(currentStoredKey)) {
+    safeRemoveItem(storage, 'lot_zero_api_key');
   }
 
   const sanitizedKey = isDemoCredential(currentStoredKey) ? '' : (currentStoredKey || '');

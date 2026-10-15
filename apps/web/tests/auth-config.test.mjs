@@ -10,6 +10,10 @@ import {
   canStartSse,
   hasEffectiveAuth,
   isDemoCredential,
+  getSafeStorage,
+  safeGetItem,
+  safeSetItem,
+  safeRemoveItem,
 } from '../src/utils/authConfig.js';
 import {
   deriveSummaryFromProjection,
@@ -471,4 +475,88 @@ test('synchronization test: persona changes cannot reintroduce an earlier summar
   const merged = mergeCasesWithProjection(staleServerData, currentProj, 'all');
   assert.equal(merged[0].case_version, 6);
   assert.equal(merged[0].phase, 'action_review');
+});
+
+class ThrowingStorage {
+  getItem() {
+    throw new Error('SecurityError: Access to Storage is denied for this document');
+  }
+  setItem() {
+    throw new Error('SecurityError: Access to Storage is denied for this document');
+  }
+  removeItem() {
+    throw new Error('SecurityError: Access to Storage is denied for this document');
+  }
+}
+
+test('safe storage helpers handle null, undefined, and throwing storage without exceptions', () => {
+  // Null storage
+  assert.equal(safeGetItem(null, 'test_key', 'fallback'), 'fallback');
+  assert.equal(safeSetItem(null, 'test_key', 'val'), false);
+  assert.equal(safeRemoveItem(null, 'test_key'), false);
+
+  // Throwing storage (simulating restricted / partitioned browser storage)
+  const throwingStorage = new ThrowingStorage();
+  assert.equal(safeGetItem(throwingStorage, 'test_key', 'default_val'), 'default_val');
+  assert.equal(safeSetItem(throwingStorage, 'test_key', 'val'), false);
+  assert.equal(safeRemoveItem(throwingStorage, 'test_key'), false);
+
+  // Functional storage
+  const functionalStorage = new MockStorage();
+  assert.equal(safeSetItem(functionalStorage, 'test_key', 'stored_value'), true);
+  assert.equal(safeGetItem(functionalStorage, 'test_key'), 'stored_value');
+  assert.equal(safeRemoveItem(functionalStorage, 'test_key'), true);
+  assert.equal(safeGetItem(functionalStorage, 'test_key', 'none'), 'none');
+});
+
+test('normalizeConfig succeeds and keeps credentials in memory when storage throws SecurityError', () => {
+  const throwingStorage = new ThrowingStorage();
+  const serverPayload = {
+    evaluation_mode: true,
+    tenant_id: 'EVAL-TENANT-01',
+    personas: [
+      { key: 'key-recall-coord-01', label: 'Recall Coordinator', can_reset: false },
+      { key: 'key-qa-lead-01', label: 'QA Lead', can_reset: false },
+    ],
+  };
+
+  // Normalization must not throw, must return valid config, and activeApiKey must be set in memory
+  const { config, activeApiKey } = normalizeConfig(serverPayload, '', throwingStorage);
+  assert.equal(config.evaluation_mode, true);
+  assert.equal(config.personas.length, 2);
+  assert.equal(activeApiKey, 'key-recall-coord-01');
+});
+
+test('normalizeConfig preserves fail-closed security when server config fails with throwing storage', () => {
+  const throwingStorage = new ThrowingStorage();
+  // Server error / null payload with previous in-memory demo key
+  const { config, activeApiKey } = normalizeConfig(null, 'key-qa-lead-01', throwingStorage);
+
+  assert.equal(config.evaluation_mode, false);
+  assert.equal(config.personas.length, 0);
+  assert.equal(activeApiKey, '');
+});
+
+test('wiring test: App.jsx contains zero direct unhandled localStorage calls', () => {
+  const __dirname = path.dirname(fileURLToPath(import.meta.url));
+  const appPath = path.resolve(__dirname, '../src/App.jsx');
+  const appSource = fs.readFileSync(appPath, 'utf8');
+
+  // Must not call localStorage directly; must use getSafeStorage / safe* helpers
+  const directLocalStoragePattern = /localStorage\.(getItem|setItem|removeItem)/g;
+  const matches = appSource.match(directLocalStoragePattern);
+  assert.equal(
+    matches,
+    null,
+    'App.jsx must not call raw localStorage directly; use getSafeStorage and safe helpers'
+  );
+});
+
+test('wiring test: App.jsx passes configStatus to Header and renders explicit retry banner', () => {
+  const __dirname = path.dirname(fileURLToPath(import.meta.url));
+  const appPath = path.resolve(__dirname, '../src/App.jsx');
+  const appSource = fs.readFileSync(appPath, 'utf8');
+
+  assert.match(appSource, /configStatus=\{configStatus\}/);
+  assert.match(appSource, /Retry Connection/);
 });

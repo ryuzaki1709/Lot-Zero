@@ -22,7 +22,8 @@ from .commands import (
     SendNotificationCommand,
 )
 from .identifiers import ActionIntent
-from .models import DomainRecord, Identifier, IncidentState, Role
+from .models import AffectedScope, DomainRecord, Identifier, IncidentState
+from .models import Role as Role
 
 
 class Principal(DomainRecord):
@@ -73,7 +74,7 @@ def _has_role(principal: Principal, role: Role) -> bool:
     return role in principal.roles
 
 
-def _scope_for(command: object, state: IncidentState):
+def _scope_for(command: object, state: IncidentState) -> AffectedScope | None:
     scope_id = getattr(command, "scope_id")
     return next((scope for scope in state.scopes if scope.scope_id == scope_id), None)
 

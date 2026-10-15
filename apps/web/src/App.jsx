@@ -8,7 +8,15 @@ import { GenealogyGraph } from './components/GenealogyGraph';
 import { ApprovalGate } from './components/ApprovalGate';
 import { EvidenceLedger } from './components/EvidenceLedger';
 import { HowItWorksModal } from './components/HowItWorksModal';
-import { normalizeConfig, buildRequestHeaders, canStartSse } from './utils/authConfig';
+import {
+  normalizeConfig,
+  buildRequestHeaders,
+  canStartSse,
+  getSafeStorage,
+  safeGetItem,
+  safeSetItem,
+  safeRemoveItem,
+} from './utils/authConfig';
 import './styles/antigravity.css';
 import './styles/responsive.css';
 
@@ -17,6 +25,7 @@ const API_BASE = '';
 export function App() {
   const [currentCaseId, setCurrentCaseId] = useState('EVAL-CASE-01');
   const [configStatus, setConfigStatus] = useState('loading'); // 'loading' | 'ready' | 'failed'
+  const [configError, setConfigError] = useState(null);
   const [activeApiKey, setActiveApiKey] = useState('');
   const [appConfig, setAppConfig] = useState({ evaluation_mode: false, tenant_id: '', personas: [] });
   const [projection, setProjection] = useState(null);
@@ -27,31 +36,45 @@ export function App() {
   const [feedback, setFeedback] = useState(null); // { type: 'error' | 'success', message: string }
 
   // Load server-side runtime configuration and evaluation personas (fail-closed)
+  const loadConfig = async () => {
+    setConfigStatus('loading');
+    setConfigError(null);
+    const storage = getSafeStorage();
+    const storedKey = safeGetItem(storage, 'lot_zero_api_key', activeApiKey);
+
+    try {
+      const res = await fetch(`${API_BASE}/api/config`);
+      if (!res.ok) {
+        throw new Error(`Server returned HTTP ${res.status}: ${res.statusText}`);
+      }
+      const data = await res.json();
+      const { config, activeApiKey: resolvedKey } = normalizeConfig(data, storedKey, storage);
+      setAppConfig(config);
+      setActiveApiKey(resolvedKey);
+      setConfigStatus('ready');
+      setConfigError(null);
+    } catch (err) {
+      const { config, activeApiKey: resolvedKey } = normalizeConfig(null, storedKey, storage);
+      setAppConfig(config);
+      setActiveApiKey(resolvedKey);
+      setConfigStatus('failed');
+      setConfigError(
+        err instanceof Error ? err.message : 'Unable to connect to configuration service.'
+      );
+    }
+  };
+
   useEffect(() => {
-    fetch(`${API_BASE}/api/config`)
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        const storedKey = localStorage.getItem('lot_zero_api_key') || '';
-        const { config, activeApiKey: resolvedKey } = normalizeConfig(data, storedKey, localStorage);
-        setAppConfig(config);
-        setActiveApiKey(resolvedKey);
-        setConfigStatus(data ? 'ready' : 'failed');
-      })
-      .catch(() => {
-        const storedKey = localStorage.getItem('lot_zero_api_key') || '';
-        const { config, activeApiKey: resolvedKey } = normalizeConfig(null, storedKey, localStorage);
-        setAppConfig(config);
-        setActiveApiKey(resolvedKey);
-        setConfigStatus('failed');
-      });
+    loadConfig();
   }, []);
 
   const handleApiKeyChange = (key) => {
     setActiveApiKey(key);
+    const storage = getSafeStorage();
     if (key) {
-      localStorage.setItem('lot_zero_api_key', key);
+      safeSetItem(storage, 'lot_zero_api_key', key);
     } else {
-      localStorage.removeItem('lot_zero_api_key');
+      safeRemoveItem(storage, 'lot_zero_api_key');
     }
     setFeedback(null);
   };
@@ -524,6 +547,7 @@ export function App() {
         sseConnected={sseConnected}
         personas={appConfig.personas}
         evaluationMode={appConfig.evaluation_mode}
+        configStatus={configStatus}
       />
 
 
@@ -548,6 +572,42 @@ export function App() {
 
       {/* Main Operational Responsive Cockpit */}
       <main className="cockpit-grid">
+        {/* Configuration Error Alert with Explicit Retry Action */}
+        {configStatus === 'failed' && (
+          <div
+            role="alert"
+            style={{
+              gridColumn: '1 / -1',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '12px 16px',
+              borderRadius: 'var(--radius-md)',
+              background: 'rgba(239, 68, 68, 0.12)',
+              border: '1px solid rgba(239, 68, 68, 0.4)',
+              color: 'var(--status-danger-text)',
+              fontSize: '13px',
+              marginBottom: '4px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span className="status-dot status-dot-danger" />
+              <div>
+                <strong>Configuration Service Offline:</strong>{' '}
+                {configError || 'Failed to load server runtime configuration.'}{' '}
+                Operating in fail-closed mode.
+              </div>
+            </div>
+            <button
+              className="btn btn-primary"
+              style={{ padding: '5px 14px', fontSize: '12px', whiteSpace: 'nowrap' }}
+              onClick={loadConfig}
+            >
+              Retry Connection
+            </button>
+          </div>
+        )}
+
         {/* Global Denial/Error Surface (Group 1c) */}
         {feedback && (
           <div

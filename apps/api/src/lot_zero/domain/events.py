@@ -15,7 +15,7 @@ from .models import (
     NonNegativeQuantity,
     NonNegativeVersion,
 )
-from .transitions import TransitionEvent
+from .transitions import TransitionEvent as TransitionEvent
 
 
 class EventRecord(DomainRecord):

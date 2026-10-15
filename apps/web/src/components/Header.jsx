@@ -42,6 +42,7 @@ export function Header({
   onExportAudit,
   personas = [],
   evaluationMode = false,
+  configStatus = 'ready',
 }) {
   const modelName = projection?.runtime?.model?.value || 'gemini-3.5-flash';
   const docHash = projection?.header?.source_doc_hash;
@@ -90,14 +91,48 @@ export function Header({
             </span>
             <span className="hide-mobile" style={{ color: 'var(--border-medium)' }}>/</span>
             <span className="mono-val hide-mobile" style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{caseId}</span>
-            <span className="status-inline" style={{ fontSize: '12.5px' }}>
+            <span
+              className="status-inline"
+              title={sseConnected ? 'Live SSE connected' : 'Offline'}
+              style={{ fontSize: '12.5px' }}
+            >
               <span className={`status-dot ${sseConnected ? 'status-dot-success' : 'status-dot-danger'}`} />
               {sseConnected ? 'Live' : 'Offline'}
             </span>
           </div>
 
           <div className="topbar-actions">
-            {evaluationMode && personas && personas.length > 0 ? (
+            {configStatus === 'loading' ? (
+              <span
+                className="badge-auth-status"
+                style={{
+                  fontSize: '12px',
+                  padding: '5px 9px',
+                  borderRadius: '4px',
+                  background: 'var(--bg-elevated, #24272f)',
+                  color: 'var(--text-secondary, #94a3b8)',
+                  border: '1px solid var(--border-subtle, #334155)',
+                }}
+                title="Loading runtime configuration"
+              >
+                Initializing...
+              </span>
+            ) : configStatus === 'failed' ? (
+              <span
+                className="badge-auth-status"
+                style={{
+                  fontSize: '12px',
+                  padding: '5px 9px',
+                  borderRadius: '4px',
+                  background: 'rgba(239, 68, 68, 0.12)',
+                  color: 'var(--status-danger-text, #ef4444)',
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                }}
+                title="Server configuration failed; fail-closed security mode active"
+              >
+                Config Offline
+              </span>
+            ) : evaluationMode && personas && personas.length > 0 ? (
               <select
                 value={activeApiKey || personas[0]?.key}
                 onChange={(e) => onApiKeyChange && onApiKeyChange(e.target.value)}
@@ -128,8 +163,6 @@ export function Header({
                   ? 'Authenticated'
                   : 'Sign-in / API Key Required'}
               </span>
-
-
             )}
 
 
